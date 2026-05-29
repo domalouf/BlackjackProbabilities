@@ -1,6 +1,6 @@
 import { Deck } from './deck';
 import { Hand } from './hand';
-import { GameResult, determineWinner } from './gameRules';
+import { GameResult, determineWinner, shouldDealerHit, getPayoutMultiplier } from './gameRules';
 
 export type GamePhase = 'betting' | 'playing' | 'dealer-turn' | 'result';
 
@@ -117,7 +117,6 @@ export class BlackjackGame {
     this.state.phase = 'dealer-turn';
 
     // Dealer plays automatically
-    const { shouldDealerHit } = require('./gameRules');
     while (shouldDealerHit(this.state.dealerHand)) {
       this.state.dealerHand.add(this.state.deck.deal());
     }
@@ -131,7 +130,6 @@ export class BlackjackGame {
     this.state.phase = 'result';
 
     // Calculate payout
-    const { getPayoutMultiplier } = require('./gameRules');
     const payout = this.state.currentBet * getPayoutMultiplier(result);
     this.state.balance += payout;
   }
