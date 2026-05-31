@@ -11,3 +11,30 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Photographic table background and popup scale animation */
+.table-bg {
+  background-image: url('https://images.unsplash.com/photo-1519741491668-3d1a5b6b5d3b?auto=format&fit=crop&w=1600&q=80');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-scale-in {
+  animation: scaleIn 180ms cubic-bezier(.2,.9,.2,1) both;
+}
+
+.overlay-dark {
+  background: rgba(0,0,0,0.5);
+}

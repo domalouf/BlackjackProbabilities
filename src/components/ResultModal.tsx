@@ -1,4 +1,4 @@
-import React from 'react';
+// React import not required with the JSX transform
 import { GameResult } from '../game/gameRules';
 import { Hand } from '../game/hand';
 import HandDisplay from './HandDisplay';
@@ -54,7 +54,7 @@ export default function ResultModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className="bg-gray-800 rounded-lg p-8 text-white max-w-md w-full">
+      <div className="bg-gray-800 rounded-lg p-8 text-white max-w-md w-full animate-scale-in">
         <h2 className={`text-4xl font-bold text-center mb-8 ${resultColor}`}>
           {resultText}
         </h2>
