@@ -1,102 +1,96 @@
 # Blackjack Probabilities
 
-A React-based blackjack game with integrated probability calculations.
+A playable blackjack game that shows the **exact** probability of every outcome
+as you play — your chance of winning if you stand, of busting if you hit, and of
+the dealer busting or landing on each total.
 
-## Features (Phase 1)
+Live: [domalouf.com/blackjack](https://domalouf.com/blackjack/)
 
-- Play blackjack against the dealer
-- Hit, Stand, and Double Down actions
-- Chip-based betting system
-- Real-time balance tracking
-- Proper Ace handling (11 unless bust, then 1)
-- Full game flow: betting → dealing → player actions → dealer play → results
+## What makes the numbers "exact"
 
-## Tech Stack
+Most odds tools quote figures from a precomputed basic-strategy table that
+assumes an infinitely large deck. This one enumerates the actual game tree:
 
-- **Frontend:** React + TypeScript
-- **Styling:** Tailwind CSS
-- **Build:** Vite
-- **Deployment:** Static site (Nginx)
+- The dealer's outcome distribution is computed by recursing over **every card
+  the dealer could draw**, weighting each branch by its true probability given
+  the cards left in the shoe. Card counts go down as cards come out — no
+  infinite-deck shortcut.
+- It conditions on the US **peek rule**: once the dealer has checked for
+  blackjack, every downstream probability is renormalised on "dealer does not
+  have a natural".
+- Player expected values (stand / hit / double) are derived from that dealer
+  distribution, with the hit branch playing on optimally. EV is reported in bet
+  units, and the highest-EV action is flagged as the best play.
 
-## Project Structure
+Because it reads the live shoe, the odds shift as the shoe depletes — exactly
+what a card counter is tracking.
+
+The engine (`src/probability/`) is pure and framework-free; the React app is
+just one consumer. It's covered by 30-plus tests that check it against published
+dealer-bust and expected-value tables (`npm test`).
+
+## House rules
+
+Las Vegas 6-deck standard, set in `src/game/rules.ts`:
+
+| Rule | Value |
+| --- | --- |
+| Decks | 6, reshuffled at 75% penetration |
+| Dealer soft 17 | Hits |
+| Blackjack pays | 3:2 |
+| Double down | Any first two cards |
+| Insurance / split | Not implemented |
+
+## Tech stack
+
+- React 18 + TypeScript, Vite
+- Tailwind CSS
+- Vitest for the engine tests
+- Deploys as a static site behind nginx
+
+## Project structure
 
 ```
 src/
-├── game/               # Pure game logic (no React)
-│   ├── card.ts        # Card types and utilities
-│   ├── deck.ts        # Deck class with shuffle/deal
-│   ├── hand.ts        # Hand class with value calculation
-│   ├── gameRules.ts   # Dealer logic and winner determination
-│   └── gameState.ts   # Main game state machine
-├── components/        # React components
-│   ├── App.tsx        # Main game orchestrator
-│   ├── BettingScreen.tsx
-│   ├── GameScreen.tsx
-│   ├── HandDisplay.tsx
-│   ├── ActionButtons.tsx
-│   └── ResultModal.tsx
-└── index.css         # Tailwind styles
+├── probability/        Pure exact-odds engine (no React)
+│   ├── deckMath.ts     Card-value buckets, hand-value arithmetic
+│   ├── dealer.ts       Exact dealer outcome distribution
+│   ├── player.ts       Stand/hit/double EV, bust odds, best action
+│   └── *.test.ts       Validated against published tables
+├── game/               Game rules and state machine (no React)
+│   ├── card.ts  shoe.ts  hand.ts  rules.ts  engine.ts
+│   └── *.test.ts
+├── hooks/useBlackjack.ts   Bridges the engine to React
+├── components/         UI
+└── lib/format.ts       Number formatting
 ```
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 16+ and npm
-
-### Installation
+## Development
 
 ```bash
 npm install
+npm run dev        # http://localhost:5173
+npm test           # engine + rules tests
+npm run build      # -> dist/
 ```
-
-### Development
-
-```bash
-npm run dev
-```
-
-### Build
-
-```bash
-npm run build
-```
-
-This creates a `dist` folder with optimized static files ready to deploy to Nginx.
-
-## Game Rules (Phase 1)
-
-- **Hit:** Draw another card
-- **Stand:** End your turn
-- **Double Down:** Double your bet, draw exactly one card, then stand
-- **Dealer Rules:** Hits on 16 or less, stands on 17+
-- **Ace Handling:** Aces count as 11 unless the hand would bust, then as 1
-- **Payouts:**
-  - Blackjack (21 on deal): 1.5x your bet
-  - Win: 1x your bet (you get 2x total)
-  - Push (tie): Your original bet back
-  - Loss: You lose your bet
-
-## Future Phases
-
-### Phase 2: Probability Display
-- Add win/loss/tie probability calculations
-- Display odds at each decision point
-- Educational overlay showing hand probabilities
-
-### Phase 3: Polish
-- Card animations
-- Sound effects
-- Session stats panel
-- Settings and preferences
 
 ## Deployment
 
-To deploy to your Raspberry Pi with Nginx:
+The site is served from the `blackjack/` sub-path of the web root on the
+Raspberry Pi that runs [domalouf.com](https://domalouf.com) (nginx in the
+HealthBoard docker-compose stack).
 
-1. Build the project: `npm run build`
-2. Copy the `dist` folder to your Nginx static files directory
-3. Serve via Nginx on your Cloudflare tunnel
+```bash
+./deploy/deploy.sh
+```
+
+This runs the tests, builds with `base=/blackjack/`, and rsyncs `dist/` to
+`pi:HealthBoard/piStuff/website/blackjack/`. Static files are live immediately —
+no nginx reload. Override the target with `PI_DEST=...` or the base path with
+`BASE_PATH=...` to host it elsewhere.
+
+The app ships **zero external requests** (no web fonts, no CDN, no remote
+images), so it runs under the Pi's strict `default-src 'self'` CSP unchanged.
 
 ## License
 

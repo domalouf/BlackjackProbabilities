@@ -2,39 +2,117 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light dark;
+
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eef0f3;
+  --border: #e2e5ea;
+  --text: #1a1d23;
+  --text-muted: #6b7280;
+  --felt: #0f7b52;
+  --felt-edge: #0a5c3d;
+
+  --accent: #4f46e5;
+  --win: #159f6e;
+  --loss: #e5484d;
+  --push: #b58a2b;
+  --neutral: #8b93a1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0f13;
+    --surface: #161a21;
+    --surface-2: #1e232c;
+    --border: #2a303b;
+    --text: #e8eaed;
+    --text-muted: #9aa3b2;
+    --felt: #0c5c3e;
+    --felt-edge: #063f2a;
+
+    --accent: #7c74ff;
+    --win: #2fca92;
+    --loss: #ff6b6f;
+    --push: #d8a84a;
+    --neutral: #6b7482;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
-    'Helvetica Neue',
-    sans-serif;
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Photographic table background and popup scale animation */
-.table-bg {
-  background-image: url('https://images.unsplash.com/photo-1519741491668-3d1a5b6b5d3b?auto=format&fit=crop&w=1600&q=80');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
 }
 
-@keyframes scaleIn {
+.felt {
+  background:
+    radial-gradient(120% 90% at 50% 0%, var(--felt) 0%, var(--felt-edge) 100%);
+}
+
+@keyframes cardIn {
   from {
-    transform: scale(0.96);
     opacity: 0;
+    transform: translateY(-8px) rotate(-3deg);
   }
   to {
-    transform: scale(1);
     opacity: 1;
+    transform: none;
   }
 }
 
-.animate-scale-in {
-  animation: scaleIn 180ms cubic-bezier(.2,.9,.2,1) both;
+.card-in {
+  animation: cardIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-.overlay-dark {
-  background: rgba(0,0,0,0.5);
+@keyframes barGrow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-up {
+  animation: fadeUp 200ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

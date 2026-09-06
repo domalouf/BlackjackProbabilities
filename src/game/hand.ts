@@ -1,5 +1,13 @@
-import { Card, getRankValue } from './card';
+import { Card } from './card';
+import {
+  addCard,
+  Bucket,
+  handValue,
+  HandValue,
+  rankToBucket,
+} from '../probability/deckMath';
 
+/** A mutable hand of real cards, with blackjack-correct value logic. */
 export class Hand {
   private cards: Card[] = [];
 
@@ -7,47 +15,46 @@ export class Hand {
     this.cards.push(card);
   }
 
-  getCards(): Card[] {
-    return [...this.cards];
-  }
-
   clear(): void {
     this.cards = [];
   }
 
+  getCards(): Card[] {
+    return [...this.cards];
+  }
+
+  getSize(): number {
+    return this.cards.length;
+  }
+
+  /** Value buckets (1–10) for the probability engine. */
+  buckets(): Bucket[] {
+    return this.cards.map((c) => rankToBucket(c.rank));
+  }
+
+  value(): HandValue {
+    return handValue(this.buckets());
+  }
+
   getValue(): number {
-    let value = 0;
-    let aces = 0;
+    return this.value().total;
+  }
 
-    // Calculate value with all aces as 11
-    for (const card of this.cards) {
-      const cardValue = getRankValue(card.rank);
-      if (card.rank === 'A') {
-        aces++;
-      }
-      value += cardValue;
-    }
-
-    // If bust, convert aces from 11 to 1 until no longer bust or out of aces
-    while (value > 21 && aces > 0) {
-      value -= 10; // Convert one ace from 11 to 1
-      aces--;
-    }
-
-    return value;
+  /** True when an Ace is still counted as 11 (a "soft" hand). */
+  isSoft(): boolean {
+    return this.value().softAces > 0;
   }
 
   isBlackjack(): boolean {
-    if (this.cards.length !== 2) return false;
-    const value = this.getValue();
-    return value === 21;
+    return this.cards.length === 2 && this.getValue() === 21;
   }
 
   isBust(): boolean {
     return this.getValue() > 21;
   }
 
-  getSize(): number {
-    return this.cards.length;
+  /** Value the hand *would* have with one more bucket added — no mutation. */
+  peekValue(bucket: Bucket): HandValue {
+    return addCard(this.value(), bucket);
   }
 }
