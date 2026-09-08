@@ -5,7 +5,6 @@ import {
   GameResult,
   HouseRules,
   netResult,
-  settle,
   shouldDealerHit,
   VEGAS_6_DECK,
 } from './rules';
@@ -26,10 +25,8 @@ export interface SessionStats {
   losses: number;
   pushes: number;
   blackjacks: number;
-  /** Net bankroll change across the session. */
+  /** Net result across the session, in bet units. */
   net: number;
-  /** Peak bankroll seen this session. */
-  peak: number;
 }
 
 /** Hi-Lo card count as a player at the table could keep it. */
@@ -46,7 +43,6 @@ export interface CardCount {
 
 export interface GameSnapshot {
   phase: GamePhase;
-  balance: number;
   bet: number;
   /** True once the bet has been doubled this hand. */
   doubled: boolean;
@@ -69,13 +65,14 @@ const freshStats = (): SessionStats => ({
   pushes: 0,
   blackjacks: 0,
   net: 0,
-  peak: 0,
 });
+
+/** Every hand is played for a fixed 1-unit bet; doubling down raises it to 2. */
+const BASE_BET = 1;
 
 export class BlackjackGame {
   private phase: GamePhase = 'betting';
-  private balance: number;
-  private bet = 0;
+  private bet = BASE_BET;
   private doubled = false;
   private player = new Hand();
   private dealer = new Hand();
@@ -84,19 +81,13 @@ export class BlackjackGame {
   private stats = freshStats();
   private reshuffledLastDeal = false;
 
-  constructor(
-    initialBalance = 1000,
-    private readonly rules: HouseRules = VEGAS_6_DECK,
-  ) {
-    this.balance = initialBalance;
-    this.stats.peak = initialBalance;
+  constructor(private readonly rules: HouseRules = VEGAS_6_DECK) {
     this.shoe = new Shoe(rules.decks);
   }
 
   snapshot(): GameSnapshot {
     return {
       phase: this.phase,
-      balance: this.balance,
       bet: this.bet,
       doubled: this.doubled,
       player: this.player,
@@ -113,21 +104,14 @@ export class BlackjackGame {
 
   // --- Betting -------------------------------------------------------------
 
-  canBet(amount: number): boolean {
-    return (
-      this.phase === 'betting' && amount > 0 && amount <= this.balance
-    );
-  }
-
-  deal(amount: number): void {
-    if (!this.canBet(amount)) throw new Error('Invalid bet');
+  deal(): void {
+    if (this.phase !== 'betting') throw new Error('Not in betting phase');
 
     this.reshuffledLastDeal = this.shoe.needsReshuffle();
     if (this.reshuffledLastDeal) this.shoe.reset();
 
-    this.bet = amount;
+    this.bet = BASE_BET;
     this.doubled = false;
-    this.balance -= amount;
     this.player.clear();
     this.dealer.clear();
     this.result = null;
@@ -148,11 +132,7 @@ export class BlackjackGame {
   // --- Player actions ----------------------------------------------------
 
   get canDouble(): boolean {
-    return (
-      this.phase === 'player' &&
-      this.player.getSize() === 2 &&
-      this.balance >= this.bet
-    );
+    return this.phase === 'player' && this.player.getSize() === 2;
   }
 
   hit(): void {
@@ -168,7 +148,6 @@ export class BlackjackGame {
 
   doubleDown(): void {
     if (!this.canDouble) throw new Error('Cannot double down now');
-    this.balance -= this.bet;
     this.bet *= 2;
     this.doubled = true;
     this.player.add(this.shoe.deal());
@@ -182,7 +161,7 @@ export class BlackjackGame {
   playAgain(): void {
     if (this.phase !== 'result') throw new Error('Hand not finished');
     this.phase = 'betting';
-    this.bet = 0;
+    this.bet = BASE_BET;
     this.doubled = false;
     this.result = null;
   }
@@ -203,12 +182,10 @@ export class BlackjackGame {
     const result = determineWinner(this.player, this.dealer);
     this.result = result;
     this.phase = 'result';
-    this.balance += settle(result, this.bet, this.rules);
 
     const delta = netResult(result, this.bet, this.rules);
     this.stats.handsPlayed += 1;
     this.stats.net += delta;
-    this.stats.peak = Math.max(this.stats.peak, this.balance);
     if (result === 'player-blackjack') this.stats.blackjacks += 1;
     if (delta > 0) this.stats.wins += 1;
     else if (delta < 0) this.stats.losses += 1;

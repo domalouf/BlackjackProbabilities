@@ -15,13 +15,10 @@ export interface DecisionAnalysis {
   canDouble: boolean;
 }
 
-export function useBlackjack(
-  initialBalance = 1000,
-  rules: HouseRules = VEGAS_6_DECK,
-) {
+export function useBlackjack(rules: HouseRules = VEGAS_6_DECK) {
   const gameRef = useRef<BlackjackGame>();
   if (!gameRef.current) {
-    gameRef.current = new BlackjackGame(initialBalance, rules);
+    gameRef.current = new BlackjackGame(rules);
   }
   const game = gameRef.current;
 
@@ -52,8 +49,8 @@ export function useBlackjack(
 
   const actions = useMemo(
     () => ({
-      deal: (amount: number) => {
-        game.deal(amount);
+      deal: () => {
+        game.deal();
         lastDecision.current = null;
         rerender();
       },

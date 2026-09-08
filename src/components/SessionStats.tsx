@@ -1,5 +1,5 @@
 import { SessionStats as Stats } from '../game/engine';
-import { money } from '../lib/format';
+import { units } from '../lib/format';
 
 export default function SessionStats({ stats }: { stats: Stats }) {
   const items: { label: string; value: string; tone?: 'win' | 'loss' }[] = [
@@ -10,8 +10,8 @@ export default function SessionStats({ stats }: { stats: Stats }) {
     },
     { label: 'Blackjacks', value: String(stats.blackjacks) },
     {
-      label: 'Net',
-      value: money(stats.net),
+      label: 'Net (units)',
+      value: units(stats.net),
       tone: stats.net > 0 ? 'win' : stats.net < 0 ? 'loss' : undefined,
     },
   ];

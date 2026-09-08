@@ -34,8 +34,8 @@ describe('Shoe running count', () => {
 describe('BlackjackGame card count', () => {
   const freshHand = (): BlackjackGame => {
     for (let attempt = 0; attempt < 50; attempt++) {
-      const game = new BlackjackGame(1000);
-      game.deal(1);
+      const game = new BlackjackGame();
+      game.deal();
       if (game.snapshot().phase === 'player') return game;
     }
     throw new Error('never dealt a non-blackjack hand');

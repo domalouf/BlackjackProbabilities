@@ -1,19 +1,16 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { GameSnapshot } from '../game/engine';
-import { money } from '../lib/format';
 
 interface Props {
   snapshot: GameSnapshot;
   canDouble: boolean;
   recommended: 'hit' | 'stand' | 'double' | null;
-  onDeal: (amount: number) => void;
+  onDeal: () => void;
   onHit: () => void;
   onStand: () => void;
   onDouble: () => void;
   onPlayAgain: () => void;
 }
-
-const CHIPS = [1, 5, 25, 100, 500];
 
 function Btn({
   children,
@@ -62,43 +59,15 @@ export default function Controls({
   onDouble,
   onPlayAgain,
 }: Props) {
-  const [bet, setBet] = useState(1);
-
-  useEffect(() => {
-    if (bet > snapshot.balance) setBet(snapshot.balance);
-  }, [snapshot.balance, bet]);
-
   if (snapshot.phase === 'betting') {
     return (
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {CHIPS.map((c) => (
-            <button
-              key={c}
-              onClick={() => setBet((b) => Math.min(b + c, snapshot.balance))}
-              disabled={bet + c > snapshot.balance}
-              className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-semibold transition disabled:opacity-40"
-            >
-              +{money(c)}
-            </button>
-          ))}
-          <button
-            onClick={() => setBet(0)}
-            className="text-sm text-[var(--text-muted)] underline-offset-2 hover:underline"
-          >
-            clear
-          </button>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="tabular text-lg font-bold">Bet {money(bet)}</div>
-          <Btn
-            variant="primary"
-            onClick={() => onDeal(bet)}
-            disabled={bet <= 0 || bet > snapshot.balance}
-          >
-            Deal
-          </Btn>
-        </div>
+      <div className="flex items-center gap-3">
+        <Btn variant="primary" onClick={onDeal}>
+          Deal
+        </Btn>
+        <p className="text-sm text-[var(--text-muted)]">
+          Every hand bets 1 unit — double down to raise it to 2.
+        </p>
       </div>
     );
   }

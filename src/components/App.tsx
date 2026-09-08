@@ -5,7 +5,7 @@ import Controls from './Controls';
 import ProbabilityPanel from './ProbabilityPanel';
 import SessionStats from './SessionStats';
 import TableInfo from './TableInfo';
-import { money } from '../lib/format';
+import { units } from '../lib/format';
 
 const RESULT_TEXT: Record<GameResult, string> = {
   'player-blackjack': 'Blackjack!',
@@ -23,8 +23,7 @@ function outcomeTone(result: GameResult): 'win' | 'loss' | 'push' {
 
 export default function App() {
   const { snapshot, decision, actions, canDouble } = useBlackjack();
-  const { phase, player, dealer, result, rules, stats, balance, bet, count } =
-    snapshot;
+  const { phase, player, dealer, result, rules, stats, bet, count } = snapshot;
 
   const playerOutcome =
     phase === 'result' && result ? outcomeTone(result) : null;
@@ -41,23 +40,15 @@ export default function App() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-4 px-4 py-6 sm:py-10">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-            Blackjack Probabilities
-          </h1>
-          <p className="text-xs text-[var(--text-muted)]">
-            {rules.decks}-deck shoe · dealer{' '}
-            {rules.hitSoft17 ? 'hits' : 'stands'} soft 17 · blackjack pays{' '}
-            {rules.blackjackPayout === 1.5 ? '3:2' : `${rules.blackjackPayout}:1`}
-          </p>
-        </div>
-        <div className="text-right">
-          <div className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-            Balance
-          </div>
-          <div className="tabular text-lg font-bold">{money(balance)}</div>
-        </div>
+      <header>
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+          Blackjack Probabilities
+        </h1>
+        <p className="text-xs text-[var(--text-muted)]">
+          {rules.decks}-deck shoe · dealer{' '}
+          {rules.hitSoft17 ? 'hits' : 'stands'} soft 17 · blackjack pays{' '}
+          {rules.blackjackPayout === 1.5 ? '3:2' : `${rules.blackjackPayout}:1`}
+        </p>
       </header>
 
       <div className="table-grid flex-1 gap-4">
@@ -89,15 +80,16 @@ export default function App() {
                           : 'rgba(255,255,255,0.75)',
                   }}
                 >
-                  {delta > 0 ? '+' : delta < 0 ? '−' : ''}
-                  {delta !== 0 ? money(Math.abs(delta)) : 'no change'}
+                  {delta !== 0
+                    ? `${units(delta)} unit${Math.abs(delta) === 1 ? '' : 's'}`
+                    : 'push'}
                 </div>
               </div>
             )}
 
             {phase === 'betting' && (
               <p className="text-center text-sm text-white/70">
-                Place your bet to deal.
+                Deal to play — 1 unit per hand.
               </p>
             )}
 

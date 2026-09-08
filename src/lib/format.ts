@@ -13,3 +13,10 @@ export const signed = (x: number, digits = 0): string => {
 
 export const money = (x: number): string =>
   `${x < 0 ? '−' : ''}$${Math.abs(Math.round(x)).toLocaleString()}`;
+
+/** Signed bet-unit amount, trimmed to whole numbers where possible: +2, −1.5, 0. */
+export const units = (x: number): string => {
+  const sign = x > 0 ? '+' : x < 0 ? '−' : '';
+  const abs = Math.abs(x);
+  return `${sign}${Number.isInteger(abs) ? abs : abs.toFixed(1)}`;
+};
