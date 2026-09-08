@@ -1,8 +1,8 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { GameSnapshot } from '../game/engine';
-import { DualDecisionAnalysis } from '../hooks/useBlackjack';
+import { DecisionAnalysis, DualDecisionAnalysis } from '../hooks/useBlackjack';
 import { chanceDealerReaches, DealerDistribution } from '../probability';
-import { ev, pct } from '../lib/format';
+import { ev, pct, pctDelta } from '../lib/format';
 
 interface Props {
   snapshot: GameSnapshot;
@@ -10,14 +10,56 @@ interface Props {
   style?: CSSProperties;
 }
 
+type Mode = 'noCount' | 'counting';
+
+function DeltaBadge({ diff, digits = 1 }: { diff: number; digits?: number }) {
+  if (Math.abs(diff) < 0.0005) return null;
+  return (
+    <span className="tabular ml-1 text-[10px] font-medium text-[var(--text-muted)]">
+      ({pctDelta(diff, digits)})
+    </span>
+  );
+}
+
+function ModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: Mode;
+  onChange: (mode: Mode) => void;
+}) {
+  const OPTIONS: { key: Mode; label: string }[] = [
+    { key: 'noCount', label: 'No count' },
+    { key: 'counting', label: 'Counting' },
+  ];
+  return (
+    <div className="inline-flex gap-0.5 rounded-lg bg-[var(--surface-2)] p-0.5">
+      {OPTIONS.map((o) => (
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          className="rounded-md px-2.5 py-1 text-[11px] font-semibold transition"
+          style={{
+            background: mode === o.key ? 'var(--surface)' : 'transparent',
+            color: mode === o.key ? 'var(--text)' : 'var(--text-muted)',
+            boxShadow: mode === o.key ? '0 1px 2px rgba(0,0,0,0.08)' : undefined,
+          }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function StackedBar({
   segments,
 }: {
-  segments: { label: string; value: number; color: string }[];
+  segments: { label: string; value: number; baseline?: number; color: string }[];
 }) {
   return (
     <div>
-      <div className="flex h-5 w-full overflow-hidden rounded-md">
+      <div className="flex h-6 w-full overflow-hidden rounded-md">
         {segments.map((s) => (
           <div
             key={s.label}
@@ -30,15 +72,18 @@ function StackedBar({
           />
         ))}
       </div>
-      <div className="mt-1.5 flex flex-col gap-0.5">
+      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
         {segments.map((s) => (
           <span key={s.label} className="flex items-center gap-1.5 text-xs">
             <span
-              className="inline-block h-2 w-2 shrink-0 rounded-sm"
+              className="inline-block h-2 w-2 rounded-sm"
               style={{ background: s.color }}
             />
             <span className="text-[var(--text-muted)]">{s.label}</span>
-            <span className="tabular ml-auto font-semibold">{pct(s.value)}</span>
+            <span className="tabular font-semibold">{pct(s.value)}</span>
+            {s.baseline !== undefined && (
+              <DeltaBadge diff={s.value - s.baseline} />
+            )}
           </span>
         ))}
       </div>
@@ -46,97 +91,53 @@ function StackedBar({
   );
 }
 
-function ComparisonColumns({
-  countingSegments,
-  noCountSegments,
-}: {
-  countingSegments: { label: string; value: number; color: string }[];
-  noCountSegments: { label: string; value: number; color: string }[];
-}) {
-  return (
-    <div className="grid grid-cols-2 gap-3">
-      <div>
-        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
-          Counting
-        </div>
-        <StackedBar segments={countingSegments} />
-      </div>
-      <div>
-        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          No count
-        </div>
-        <StackedBar segments={noCountSegments} />
-      </div>
-    </div>
-  );
-}
-
 function DealerBars({
-  counting,
-  noCount,
+  dist,
+  baseline,
 }: {
-  counting: DealerDistribution;
-  noCount: DealerDistribution;
+  dist: DealerDistribution;
+  baseline?: DealerDistribution;
 }) {
-  const rows: {
-    label: string;
-    counting: number;
-    noCount: number;
-    danger?: boolean;
-  }[] = [
-    { label: '17', counting: counting.p17, noCount: noCount.p17 },
-    { label: '18', counting: counting.p18, noCount: noCount.p18 },
-    { label: '19', counting: counting.p19, noCount: noCount.p19 },
-    { label: '20', counting: counting.p20, noCount: noCount.p20 },
+  const rows: { label: string; value: number; base?: number; danger?: boolean }[] = [
+    { label: '17', value: dist.p17, base: baseline?.p17 },
+    { label: '18', value: dist.p18, base: baseline?.p18 },
+    { label: '19', value: dist.p19, base: baseline?.p19 },
+    { label: '20', value: dist.p20, base: baseline?.p20 },
     {
       label: '21',
-      counting: chanceDealerReaches(counting, 21),
-      noCount: chanceDealerReaches(noCount, 21),
+      value: chanceDealerReaches(dist, 21),
+      base: baseline && chanceDealerReaches(baseline, 21),
     },
     {
       label: 'Bust',
-      counting: counting.pBust,
-      noCount: noCount.pBust,
+      value: dist.pBust,
+      base: baseline?.pBust,
       danger: true,
     },
   ];
-  const max = Math.max(...rows.flatMap((r) => [r.counting, r.noCount]), 0.01);
-
+  const max = Math.max(...rows.map((r) => r.value), 0.01);
   return (
-    <div>
-      <div className="mb-1.5 grid grid-cols-[1.75rem_1fr_1fr] gap-2 text-[10px] font-semibold uppercase tracking-wide">
-        <span />
-        <span className="text-[var(--accent)]">Counting</span>
-        <span className="text-[var(--text-muted)]">No count</span>
-      </div>
-      <div className="space-y-1.5">
-        {rows.map((r) => (
-          <div
-            key={r.label}
-            className="grid grid-cols-[1.75rem_1fr_1fr] items-center gap-2"
-          >
-            <span className="tabular text-xs text-[var(--text-muted)]">
-              {r.label}
-            </span>
-            {[r.counting, r.noCount].map((value, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <div className="h-3 flex-1 rounded-sm bg-[var(--surface-2)]">
-                  <div
-                    className="h-full rounded-sm"
-                    style={{
-                      width: `${(value / max) * 100}%`,
-                      background: r.danger ? 'var(--win)' : 'var(--neutral)',
-                    }}
-                  />
-                </div>
-                <span className="tabular w-9 shrink-0 text-right text-[11px] font-semibold">
-                  {pct(value)}
-                </span>
-              </div>
-            ))}
+    <div className="space-y-1.5">
+      {rows.map((r) => (
+        <div key={r.label} className="flex items-center gap-2">
+          <span className="tabular w-8 text-right text-xs text-[var(--text-muted)]">
+            {r.label}
+          </span>
+          <div className="h-3.5 flex-1 rounded-sm bg-[var(--surface-2)]">
+            <div
+              className="h-full rounded-sm"
+              style={{
+                width: `${(r.value / max) * 100}%`,
+                background: r.danger ? 'var(--win)' : 'var(--neutral)',
+              }}
+            />
           </div>
-        ))}
-      </div>
+          <span className="tabular w-12 text-right text-xs font-semibold">
+            {pct(r.value)}
+          </span>
+          {r.base !== undefined && <DeltaBadge diff={r.value - r.base} />}
+        </div>
+      ))}
     </div>
   );
 }
@@ -165,74 +166,76 @@ const ACTION_LABEL: Record<'hit' | 'stand' | 'double', string> = {
 };
 
 export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
+  const [mode, setMode] = useState<Mode>('noCount');
   const showLive = snapshot.phase === 'player' && decision;
   const dimmed = snapshot.phase !== 'player';
+
+  const active: DecisionAnalysis | null = decision
+    ? decision[mode]
+    : null;
+  const baseline: DecisionAnalysis | null =
+    decision && mode === 'counting' ? decision.noCount : null;
 
   return (
     <div
       className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]"
       style={{ ...style, opacity: dimmed ? 0.6 : 1, transition: 'opacity 150ms' }}
     >
-      <div className="flex items-center justify-between px-4 py-3">
-        <h2 className="text-sm font-bold">Odds &amp; expected value</h2>
-        <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-          exact · this shoe
-        </span>
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-bold">Odds &amp; expected value</h2>
+          <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
+            exact
+          </span>
+        </div>
+        {showLive && (
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <ModeToggle mode={mode} onChange={setMode} />
+            {baseline && (
+              <span className="text-[10px] leading-tight text-[var(--text-muted)]">
+                (Δ vs no count)
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {!showLive && (
         <Section title="Waiting for your turn">
           <p className="text-xs leading-relaxed text-[var(--text-muted)]">
             Place a bet and deal. Once you have a hand, this panel shows the
-            exact probability of every outcome, side by side for a player
-            counting the shoe and one who isn't — computed from the cards left
-            in the shoe, not a lookup table.
+            exact probability of every outcome — computed from the cards left
+            in the shoe, not a lookup table. Switch to "Counting" to see how
+            those odds shift once the shoe's depletion is factored in.
           </p>
         </Section>
       )}
 
-      {showLive && decision && (
+      {showLive && active && (
         <>
           <Section title="Dealer's final hand">
-            <DealerBars
-              counting={decision.counting.dealer}
-              noCount={decision.noCount.dealer}
-            />
+            <DealerBars dist={active.dealer} baseline={baseline?.dealer} />
           </Section>
 
           <Section title="If you stand now">
-            <ComparisonColumns
-              countingSegments={[
+            <StackedBar
+              segments={[
                 {
                   label: 'Win',
-                  value: decision.counting.action.stand.pWin,
+                  value: active.action.stand.pWin,
+                  baseline: baseline?.action.stand.pWin,
                   color: 'var(--win)',
                 },
                 {
                   label: 'Push',
-                  value: decision.counting.action.stand.pPush,
+                  value: active.action.stand.pPush,
+                  baseline: baseline?.action.stand.pPush,
                   color: 'var(--push)',
                 },
                 {
                   label: 'Loss',
-                  value: decision.counting.action.stand.pLoss,
-                  color: 'var(--loss)',
-                },
-              ]}
-              noCountSegments={[
-                {
-                  label: 'Win',
-                  value: decision.noCount.action.stand.pWin,
-                  color: 'var(--win)',
-                },
-                {
-                  label: 'Push',
-                  value: decision.noCount.action.stand.pPush,
-                  color: 'var(--push)',
-                },
-                {
-                  label: 'Loss',
-                  value: decision.noCount.action.stand.pLoss,
+                  value: active.action.stand.pLoss,
+                  baseline: baseline?.action.stand.pLoss,
                   color: 'var(--loss)',
                 },
               ]}
@@ -240,48 +243,30 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
           </Section>
 
           <Section title="If you hit once, then stand">
-            <ComparisonColumns
-              countingSegments={[
+            <StackedBar
+              segments={[
                 {
                   label: 'Win',
-                  value: decision.counting.action.hit.pWin,
+                  value: active.action.hit.pWin,
+                  baseline: baseline?.action.hit.pWin,
                   color: 'var(--win)',
                 },
                 {
                   label: 'Push',
-                  value: decision.counting.action.hit.pPush,
+                  value: active.action.hit.pPush,
+                  baseline: baseline?.action.hit.pPush,
                   color: 'var(--push)',
                 },
                 {
                   label: 'Loss',
-                  value: decision.counting.action.hit.pLoss,
+                  value: active.action.hit.pLoss,
+                  baseline: baseline?.action.hit.pLoss,
                   color: 'var(--loss)',
                 },
                 {
                   label: 'Bust',
-                  value: decision.counting.action.hit.pBust,
-                  color: 'color-mix(in srgb, var(--loss) 65%, black)',
-                },
-              ]}
-              noCountSegments={[
-                {
-                  label: 'Win',
-                  value: decision.noCount.action.hit.pWin,
-                  color: 'var(--win)',
-                },
-                {
-                  label: 'Push',
-                  value: decision.noCount.action.hit.pPush,
-                  color: 'var(--push)',
-                },
-                {
-                  label: 'Loss',
-                  value: decision.noCount.action.hit.pLoss,
-                  color: 'var(--loss)',
-                },
-                {
-                  label: 'Bust',
-                  value: decision.noCount.action.hit.pBust,
+                  value: active.action.hit.pBust,
+                  baseline: baseline?.action.hit.pBust,
                   color: 'color-mix(in srgb, var(--loss) 65%, black)',
                 },
               ]}
@@ -290,33 +275,23 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
 
           <Section title="Expected value per action">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="text-[10px] uppercase tracking-wide">
-                  <td />
-                  <td className="pb-1 text-right font-semibold text-[var(--accent)]">
-                    Counting
-                  </td>
-                  <td className="pb-1 text-right font-semibold text-[var(--text-muted)]">
-                    No count
-                  </td>
-                </tr>
-              </thead>
               <tbody>
                 {(['stand', 'hit', 'double'] as const).map((key) => {
-                  const countingValue =
+                  const value =
                     key === 'stand'
-                      ? decision.counting.action.stand.ev
+                      ? active.action.stand.ev
                       : key === 'hit'
-                        ? decision.counting.action.hitEv
-                        : decision.counting.action.doubleEv;
-                  const noCountValue =
-                    key === 'stand'
-                      ? decision.noCount.action.stand.ev
+                        ? active.action.hitEv
+                        : active.action.doubleEv;
+                  const baseValue = baseline
+                    ? key === 'stand'
+                      ? baseline.action.stand.ev
                       : key === 'hit'
-                        ? decision.noCount.action.hitEv
-                        : decision.noCount.action.doubleEv;
-                  const available = key !== 'double' || decision.counting.canDouble;
-                  const best = decision.counting.action.best === key;
+                        ? baseline.action.hitEv
+                        : baseline.action.doubleEv
+                    : undefined;
+                  const available = key !== 'double' || active.canDouble;
+                  const best = active.action.best === key;
                   if (!available) return null;
                   return (
                     <tr key={key}>
@@ -341,15 +316,15 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
                       <td
                         className="tabular py-1 text-right font-semibold"
                         style={{
-                          color: countingValue >= 0 ? 'var(--win)' : 'var(--loss)',
+                          color: value >= 0 ? 'var(--win)' : 'var(--loss)',
                         }}
                       >
-                        {ev(countingValue)}
-                      </td>
-                      <td
-                        className="tabular py-1 text-right font-semibold text-[var(--text-muted)]"
-                      >
-                        {ev(noCountValue)}
+                        {ev(value)}
+                        {baseValue !== undefined && (
+                          <span className="tabular ml-1.5 text-[11px] font-medium text-[var(--text-muted)]">
+                            ({ev(value - baseValue)})
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -357,10 +332,12 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
               </tbody>
             </table>
             <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-muted)]">
-              EV in bet units. <strong>Counting</strong> uses the shoe's real
-              composition, tracking every card seen since the last shuffle.{' '}
-              <strong>No count</strong> assumes a fresh shoe each hand — the
-              basic-strategy baseline a player who isn't counting relies on.
+              EV in bet units: an EV of {ev(active.action.stand.ev)} means that
+              action returns, on average, {ev(active.action.stand.ev)} times
+              your stake.{' '}
+              {mode === 'noCount'
+                ? 'Assumes a fresh shoe each hand — the basic-strategy baseline.'
+                : "Uses the shoe's real composition; figures in parentheses are the change from not counting."}
             </p>
           </Section>
         </>
