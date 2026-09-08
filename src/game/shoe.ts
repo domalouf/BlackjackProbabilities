@@ -1,5 +1,10 @@
 import { Card, Rank, Suit } from './card';
-import { makeShoe, rankToBucket, ShoeCounts } from '../probability/deckMath';
+import {
+  hiLoValue,
+  makeShoe,
+  rankToBucket,
+  ShoeCounts,
+} from '../probability/deckMath';
 
 const SUITS: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades'];
 const RANKS: Rank[] = [
@@ -61,8 +66,30 @@ export class Shoe {
     return this.cards.length;
   }
 
+  /** Decks still to be dealt, e.g. 4.2 — the divisor for a Hi-Lo true count. */
+  decksRemaining(): number {
+    return this.cards.length / 52;
+  }
+
   penetration(): number {
     return this.dealt.length / (this.decks * 52);
+  }
+
+  /** Every card dealt out of the shoe since the last shuffle, in deal order. */
+  dealtCards(): Card[] {
+    return [...this.dealt];
+  }
+
+  /**
+   * Hi-Lo running count over *every* card dealt since the last shuffle — this
+   * includes the dealer hole card, which the player cannot see yet. Callers
+   * that want the count as a player would keep it must subtract any card that
+   * is dealt but still face-down.
+   */
+  runningCount(): number {
+    let count = 0;
+    for (const card of this.dealt) count += hiLoValue(rankToBucket(card.rank));
+    return count;
   }
 
   /**

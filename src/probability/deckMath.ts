@@ -34,6 +34,18 @@ export function shoeSize(counts: ShoeCounts): number {
   return total;
 }
 
+/**
+ * Hi-Lo counting tag for a value {@link Bucket}:
+ *   2–6  → +1  (low cards gone ⇒ shoe richer in tens/aces ⇒ good for the player)
+ *   7–9  →  0  (neutral)
+ *   10, A → −1
+ */
+export function hiLoValue(bucket: Bucket): number {
+  if (bucket >= 2 && bucket <= 6) return 1;
+  if (bucket === 10 || bucket === 1) return -1;
+  return 0;
+}
+
 /** Map a rank label ('A', '7', 'K', …) to its {@link Bucket}. */
 export function rankToBucket(rank: string): Bucket {
   if (rank === 'A') return 1;

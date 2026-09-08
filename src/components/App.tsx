@@ -3,6 +3,7 @@ import { GameResult, netResult } from '../game/rules';
 import HandView from './HandView';
 import Controls from './Controls';
 import ProbabilityPanel from './ProbabilityPanel';
+import RunningCount from './RunningCount';
 import SessionStats from './SessionStats';
 import { money } from '../lib/format';
 
@@ -22,7 +23,8 @@ function outcomeTone(result: GameResult): 'win' | 'loss' | 'push' {
 
 export default function App() {
   const { snapshot, decision, actions, canDouble } = useBlackjack();
-  const { phase, player, dealer, result, rules, stats, balance, bet } = snapshot;
+  const { phase, player, dealer, result, rules, stats, balance, bet, count } =
+    snapshot;
 
   const playerOutcome =
     phase === 'result' && result ? outcomeTone(result) : null;
@@ -113,6 +115,8 @@ export default function App() {
               onPlayAgain={actions.playAgain}
             />
           </div>
+
+          <RunningCount count={count} />
 
           <SessionStats stats={stats} />
         </div>

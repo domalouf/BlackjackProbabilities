@@ -12,6 +12,7 @@ import {
 import { Shoe } from './shoe';
 import {
   Bucket,
+  hiLoValue,
   makeShoe,
   rankToBucket,
   ShoeCounts,
@@ -31,6 +32,18 @@ export interface SessionStats {
   peak: number;
 }
 
+/** Hi-Lo card count as a player at the table could keep it. */
+export interface CardCount {
+  /** Running count over every card the player has seen face-up this shoe. */
+  running: number;
+  /** Running count divided by decks remaining. */
+  true: number;
+  /** Decks still undealt in the shoe. */
+  decksRemaining: number;
+  /** Face-up cards seen since the last shuffle. */
+  seen: number;
+}
+
 export interface GameSnapshot {
   phase: GamePhase;
   balance: number;
@@ -44,6 +57,7 @@ export interface GameSnapshot {
   result: GameResult | null;
   rules: HouseRules;
   stats: SessionStats;
+  count: CardCount;
   shoePenetration: number;
   reshuffledLastDeal: boolean;
 }
@@ -87,10 +101,11 @@ export class BlackjackGame {
       doubled: this.doubled,
       player: this.player,
       dealer: this.dealer,
-      dealerHoleHidden: this.phase === 'player' || this.phase === 'betting',
+      dealerHoleHidden: this.dealerHoleHidden(),
       result: this.result,
       rules: this.rules,
       stats: { ...this.stats },
+      count: this.cardCount(),
       shoePenetration: this.shoe.penetration(),
       reshuffledLastDeal: this.reshuffledLastDeal,
     };
@@ -200,6 +215,35 @@ export class BlackjackGame {
     else this.stats.pushes += 1;
   }
 
+  // --- Card counting ------------------------------------------------------
+
+  /**
+   * Hi-Lo count from the player's seat: every card dealt this shoe *except* the
+   * dealer's hole card while it is still face-down. Resets with the shoe.
+   */
+  private cardCount(): CardCount {
+    let running = this.shoe.runningCount();
+    let seen = this.shoe.dealtCards().length;
+
+    const dealerCards = this.dealer.getCards();
+    if (this.dealerHoleHidden() && dealerCards.length > 0) {
+      running -= hiLoValue(rankToBucket(dealerCards[0].rank));
+      seen -= 1;
+    }
+
+    const decksRemaining = this.shoe.decksRemaining();
+    return {
+      running,
+      true: decksRemaining > 0 ? running / decksRemaining : 0,
+      decksRemaining,
+      seen,
+    };
+  }
+
+  private dealerHoleHidden(): boolean {
+    return this.phase === 'player' || this.phase === 'betting';
+  }
+
   // --- Probability-engine input ---------------------------------------------
 
   /**
@@ -216,7 +260,7 @@ export class BlackjackGame {
     remove(this.player.getCards());
     // Only the dealer's upcard (index 0 is the hole card, dealt first).
     const dealerCards = this.dealer.getCards();
-    if (this.phase === 'player' || this.phase === 'betting') {
+    if (this.dealerHoleHidden()) {
       remove(dealerCards.slice(1));
     } else {
       remove(dealerCards);
@@ -232,7 +276,7 @@ export class BlackjackGame {
 
   dealerVisibleBuckets(): Bucket[] {
     const cards = this.dealer.getCards();
-    if (this.phase === 'player' || this.phase === 'betting') {
+    if (this.dealerHoleHidden()) {
       return cards.slice(1).map((c) => rankToBucket(c.rank));
     }
     return cards.map((c) => rankToBucket(c.rank));
