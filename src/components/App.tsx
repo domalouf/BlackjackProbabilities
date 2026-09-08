@@ -106,14 +106,14 @@ export default function App() {
             snapshot={snapshot}
             canDouble={canDouble}
             recommended={
-              phase === 'player' ? decision?.action.best ?? null : null
+              phase === 'player' ? decision?.counting.action.best ?? null : null
             }
             evValues={
               phase === 'player' && decision
                 ? {
-                    hit: decision.action.hitEv,
-                    stand: decision.action.stand.ev,
-                    double: decision.action.doubleEv,
+                    hit: decision.counting.action.hitEv,
+                    stand: decision.counting.action.stand.ev,
+                    double: decision.counting.action.doubleEv,
                   }
                 : null
             }

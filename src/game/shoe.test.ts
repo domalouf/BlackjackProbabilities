@@ -73,3 +73,53 @@ describe('BlackjackGame card count', () => {
     expect(s.count.true).toBeCloseTo(s.count.running / s.count.decksRemaining);
   });
 });
+
+describe('BlackjackGame shoe views (counting vs no count)', () => {
+  const total = (counts: number[]) => counts.reduce((a, b) => a + b, 0);
+
+  const freshHand = (): BlackjackGame => {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const game = new BlackjackGame();
+      game.deal();
+      if (game.snapshot().phase === 'player') return game;
+    }
+    throw new Error('never dealt a non-blackjack hand');
+  };
+
+  const finishHand = (game: BlackjackGame): void => {
+    if (game.snapshot().phase === 'player') game.stand();
+    if (game.snapshot().phase === 'result') game.playAgain();
+  };
+
+  it('freshShoeCounts removes only the cards visible this hand', () => {
+    const game = freshHand();
+    // 6 decks * 52 cards, minus the player's two cards and the dealer's upcard.
+    expect(total(game.freshShoeCounts())).toBe(6 * 52 - 3);
+  });
+
+  it("countingShoeCounts matches the shoe's real remaining count, hole card included", () => {
+    const game = freshHand();
+    const s = game.snapshot();
+    const expectedRemaining = Math.round(s.count.decksRemaining * 52) + 1; // +1: still-hidden hole card
+    expect(total(game.countingShoeCounts())).toBe(expectedRemaining);
+  });
+
+  it('diverges from freshShoeCounts once earlier hands have depleted the shoe', () => {
+    const game = new BlackjackGame();
+    for (let i = 0; i < 8; i++) {
+      game.deal();
+      finishHand(game);
+    }
+
+    // Deal one more hand, retrying past any natural blackjack, to inspect mid-hand.
+    for (let attempt = 0; attempt < 50; attempt++) {
+      game.deal();
+      if (game.snapshot().phase === 'player') break;
+      game.playAgain();
+    }
+    expect(game.snapshot().phase).toBe('player');
+
+    expect(total(game.freshShoeCounts())).toBe(6 * 52 - 3);
+    expect(total(game.countingShoeCounts())).toBeLessThan(6 * 52 - 3);
+  });
+});

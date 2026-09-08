@@ -192,12 +192,29 @@ export class BlackjackGame {
   // --- Probability-engine input ---------------------------------------------
 
   /**
-   * Shoe composition as the *player* sees it: a full shoe minus every card
-   * currently face-up on the table. The dealer's hole card is deliberately
-   * left in — the player does not know it, so the engine must treat it as an
-   * unknown draw.
+   * Shoe composition as a player *counting the shoe* knows it: every card
+   * dealt since the last shuffle is removed, exactly reflecting how depleted
+   * the shoe really is. The dealer's hole card is added back in — a counter
+   * has seen it get dealt, but not what it is, so the engine must still treat
+   * it as an unknown draw.
    */
-  visibleShoeCounts(): ShoeCounts {
+  countingShoeCounts(): ShoeCounts {
+    const counts = this.shoe.remainingCounts();
+    const dealerCards = this.dealer.getCards();
+    if (this.dealerHoleHidden() && dealerCards.length > 0) {
+      counts[rankToBucket(dealerCards[0].rank)] += 1;
+    }
+    return counts;
+  }
+
+  /**
+   * Shoe composition as a player with *no memory of earlier hands* would
+   * assume it: a fresh full shoe minus only the cards visible on the table
+   * right now. Cards used up by previous hands this shoe are not tracked —
+   * this is the standard "infinite shoe" assumption basic-strategy tables
+   * are built on.
+   */
+  freshShoeCounts(): ShoeCounts {
     const counts = makeShoe(this.rules.decks);
     const remove = (cards: Card[]) => {
       for (const c of cards) counts[rankToBucket(c.rank)] -= 1;

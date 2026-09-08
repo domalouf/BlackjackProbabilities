@@ -1,12 +1,12 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { GameSnapshot } from '../game/engine';
-import { DecisionAnalysis } from '../hooks/useBlackjack';
-import { chanceDealerReaches } from '../probability';
+import { DualDecisionAnalysis } from '../hooks/useBlackjack';
+import { chanceDealerReaches, DealerDistribution } from '../probability';
 import { ev, pct } from '../lib/format';
 
 interface Props {
   snapshot: GameSnapshot;
-  decision: DecisionAnalysis | null;
+  decision: DualDecisionAnalysis | null;
   style?: CSSProperties;
 }
 
@@ -17,7 +17,7 @@ function StackedBar({
 }) {
   return (
     <div>
-      <div className="flex h-6 w-full overflow-hidden rounded-md">
+      <div className="flex h-5 w-full overflow-hidden rounded-md">
         {segments.map((s) => (
           <div
             key={s.label}
@@ -30,15 +30,15 @@ function StackedBar({
           />
         ))}
       </div>
-      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+      <div className="mt-1.5 flex flex-col gap-0.5">
         {segments.map((s) => (
           <span key={s.label} className="flex items-center gap-1.5 text-xs">
             <span
-              className="inline-block h-2 w-2 rounded-sm"
+              className="inline-block h-2 w-2 shrink-0 rounded-sm"
               style={{ background: s.color }}
             />
             <span className="text-[var(--text-muted)]">{s.label}</span>
-            <span className="tabular font-semibold">{pct(s.value)}</span>
+            <span className="tabular ml-auto font-semibold">{pct(s.value)}</span>
           </span>
         ))}
       </div>
@@ -46,41 +46,97 @@ function StackedBar({
   );
 }
 
-function DealerBars({
-  dist,
+function ComparisonColumns({
+  countingSegments,
+  noCountSegments,
 }: {
-  dist: DecisionAnalysis['dealer'];
+  countingSegments: { label: string; value: number; color: string }[];
+  noCountSegments: { label: string; value: number; color: string }[];
 }) {
-  const rows: { label: string; value: number; danger?: boolean }[] = [
-    { label: '17', value: dist.p17 },
-    { label: '18', value: dist.p18 },
-    { label: '19', value: dist.p19 },
-    { label: '20', value: dist.p20 },
-    { label: '21', value: chanceDealerReaches(dist, 21) },
-    { label: 'Bust', value: dist.pBust, danger: true },
-  ];
-  const max = Math.max(...rows.map((r) => r.value), 0.01);
   return (
-    <div className="space-y-1.5">
-      {rows.map((r) => (
-        <div key={r.label} className="flex items-center gap-2">
-          <span className="tabular w-8 text-right text-xs text-[var(--text-muted)]">
-            {r.label}
-          </span>
-          <div className="h-3.5 flex-1 rounded-sm bg-[var(--surface-2)]">
-            <div
-              className="h-full rounded-sm"
-              style={{
-                width: `${(r.value / max) * 100}%`,
-                background: r.danger ? 'var(--win)' : 'var(--neutral)',
-              }}
-            />
-          </div>
-          <span className="tabular w-12 text-right text-xs font-semibold">
-            {pct(r.value)}
-          </span>
+    <div className="grid grid-cols-2 gap-3">
+      <div>
+        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--accent)]">
+          Counting
         </div>
-      ))}
+        <StackedBar segments={countingSegments} />
+      </div>
+      <div>
+        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          No count
+        </div>
+        <StackedBar segments={noCountSegments} />
+      </div>
+    </div>
+  );
+}
+
+function DealerBars({
+  counting,
+  noCount,
+}: {
+  counting: DealerDistribution;
+  noCount: DealerDistribution;
+}) {
+  const rows: {
+    label: string;
+    counting: number;
+    noCount: number;
+    danger?: boolean;
+  }[] = [
+    { label: '17', counting: counting.p17, noCount: noCount.p17 },
+    { label: '18', counting: counting.p18, noCount: noCount.p18 },
+    { label: '19', counting: counting.p19, noCount: noCount.p19 },
+    { label: '20', counting: counting.p20, noCount: noCount.p20 },
+    {
+      label: '21',
+      counting: chanceDealerReaches(counting, 21),
+      noCount: chanceDealerReaches(noCount, 21),
+    },
+    {
+      label: 'Bust',
+      counting: counting.pBust,
+      noCount: noCount.pBust,
+      danger: true,
+    },
+  ];
+  const max = Math.max(...rows.flatMap((r) => [r.counting, r.noCount]), 0.01);
+
+  return (
+    <div>
+      <div className="mb-1.5 grid grid-cols-[1.75rem_1fr_1fr] gap-2 text-[10px] font-semibold uppercase tracking-wide">
+        <span />
+        <span className="text-[var(--accent)]">Counting</span>
+        <span className="text-[var(--text-muted)]">No count</span>
+      </div>
+      <div className="space-y-1.5">
+        {rows.map((r) => (
+          <div
+            key={r.label}
+            className="grid grid-cols-[1.75rem_1fr_1fr] items-center gap-2"
+          >
+            <span className="tabular text-xs text-[var(--text-muted)]">
+              {r.label}
+            </span>
+            {[r.counting, r.noCount].map((value, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <div className="h-3 flex-1 rounded-sm bg-[var(--surface-2)]">
+                  <div
+                    className="h-full rounded-sm"
+                    style={{
+                      width: `${(value / max) * 100}%`,
+                      background: r.danger ? 'var(--win)' : 'var(--neutral)',
+                    }}
+                  />
+                </div>
+                <span className="tabular w-9 shrink-0 text-right text-[11px] font-semibold">
+                  {pct(value)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -128,8 +184,9 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
         <Section title="Waiting for your turn">
           <p className="text-xs leading-relaxed text-[var(--text-muted)]">
             Place a bet and deal. Once you have a hand, this panel shows the
-            exact probability of every outcome — computed from the cards left in
-            the shoe, not a lookup table.
+            exact probability of every outcome, side by side for a player
+            counting the shoe and one who isn't — computed from the cards left
+            in the shoe, not a lookup table.
           </p>
         </Section>
       )}
@@ -137,25 +194,45 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
       {showLive && decision && (
         <>
           <Section title="Dealer's final hand">
-            <DealerBars dist={decision.dealer} />
+            <DealerBars
+              counting={decision.counting.dealer}
+              noCount={decision.noCount.dealer}
+            />
           </Section>
 
           <Section title="If you stand now">
-            <StackedBar
-              segments={[
+            <ComparisonColumns
+              countingSegments={[
                 {
                   label: 'Win',
-                  value: decision.action.stand.pWin,
+                  value: decision.counting.action.stand.pWin,
                   color: 'var(--win)',
                 },
                 {
                   label: 'Push',
-                  value: decision.action.stand.pPush,
+                  value: decision.counting.action.stand.pPush,
                   color: 'var(--push)',
                 },
                 {
                   label: 'Loss',
-                  value: decision.action.stand.pLoss,
+                  value: decision.counting.action.stand.pLoss,
+                  color: 'var(--loss)',
+                },
+              ]}
+              noCountSegments={[
+                {
+                  label: 'Win',
+                  value: decision.noCount.action.stand.pWin,
+                  color: 'var(--win)',
+                },
+                {
+                  label: 'Push',
+                  value: decision.noCount.action.stand.pPush,
+                  color: 'var(--push)',
+                },
+                {
+                  label: 'Loss',
+                  value: decision.noCount.action.stand.pLoss,
                   color: 'var(--loss)',
                 },
               ]}
@@ -163,26 +240,48 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
           </Section>
 
           <Section title="If you hit once, then stand">
-            <StackedBar
-              segments={[
+            <ComparisonColumns
+              countingSegments={[
                 {
                   label: 'Win',
-                  value: decision.action.hit.pWin,
+                  value: decision.counting.action.hit.pWin,
                   color: 'var(--win)',
                 },
                 {
                   label: 'Push',
-                  value: decision.action.hit.pPush,
+                  value: decision.counting.action.hit.pPush,
                   color: 'var(--push)',
                 },
                 {
                   label: 'Loss',
-                  value: decision.action.hit.pLoss,
+                  value: decision.counting.action.hit.pLoss,
                   color: 'var(--loss)',
                 },
                 {
                   label: 'Bust',
-                  value: decision.action.hit.pBust,
+                  value: decision.counting.action.hit.pBust,
+                  color: 'color-mix(in srgb, var(--loss) 65%, black)',
+                },
+              ]}
+              noCountSegments={[
+                {
+                  label: 'Win',
+                  value: decision.noCount.action.hit.pWin,
+                  color: 'var(--win)',
+                },
+                {
+                  label: 'Push',
+                  value: decision.noCount.action.hit.pPush,
+                  color: 'var(--push)',
+                },
+                {
+                  label: 'Loss',
+                  value: decision.noCount.action.hit.pLoss,
+                  color: 'var(--loss)',
+                },
+                {
+                  label: 'Bust',
+                  value: decision.noCount.action.hit.pBust,
                   color: 'color-mix(in srgb, var(--loss) 65%, black)',
                 },
               ]}
@@ -191,16 +290,33 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
 
           <Section title="Expected value per action">
             <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wide">
+                  <td />
+                  <td className="pb-1 text-right font-semibold text-[var(--accent)]">
+                    Counting
+                  </td>
+                  <td className="pb-1 text-right font-semibold text-[var(--text-muted)]">
+                    No count
+                  </td>
+                </tr>
+              </thead>
               <tbody>
                 {(['stand', 'hit', 'double'] as const).map((key) => {
-                  const value =
+                  const countingValue =
                     key === 'stand'
-                      ? decision.action.stand.ev
+                      ? decision.counting.action.stand.ev
                       : key === 'hit'
-                        ? decision.action.hitEv
-                        : decision.action.doubleEv;
-                  const available = key !== 'double' || decision.canDouble;
-                  const best = decision.action.best === key;
+                        ? decision.counting.action.hitEv
+                        : decision.counting.action.doubleEv;
+                  const noCountValue =
+                    key === 'stand'
+                      ? decision.noCount.action.stand.ev
+                      : key === 'hit'
+                        ? decision.noCount.action.hitEv
+                        : decision.noCount.action.doubleEv;
+                  const available = key !== 'double' || decision.counting.canDouble;
+                  const best = decision.counting.action.best === key;
                   if (!available) return null;
                   return (
                     <tr key={key}>
@@ -225,11 +341,15 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
                       <td
                         className="tabular py-1 text-right font-semibold"
                         style={{
-                          color:
-                            value >= 0 ? 'var(--win)' : 'var(--loss)',
+                          color: countingValue >= 0 ? 'var(--win)' : 'var(--loss)',
                         }}
                       >
-                        {ev(value)}
+                        {ev(countingValue)}
+                      </td>
+                      <td
+                        className="tabular py-1 text-right font-semibold text-[var(--text-muted)]"
+                      >
+                        {ev(noCountValue)}
                       </td>
                     </tr>
                   );
@@ -237,9 +357,10 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
               </tbody>
             </table>
             <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-muted)]">
-              EV in bet units: an EV of {ev(decision.action.stand.ev)} means that
-              action returns, on average, {ev(decision.action.stand.ev)} times
-              your stake. Highest EV is the mathematically best play.
+              EV in bet units. <strong>Counting</strong> uses the shoe's real
+              composition, tracking every card seen since the last shuffle.{' '}
+              <strong>No count</strong> assumes a fresh shoe each hand — the
+              basic-strategy baseline a player who isn't counting relies on.
             </p>
           </Section>
         </>
