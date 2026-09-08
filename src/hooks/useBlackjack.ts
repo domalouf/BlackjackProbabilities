@@ -86,6 +86,7 @@ export function useBlackjack(rules: HouseRules = VEGAS_6_DECK) {
       },
       playAgain: () => {
         game.playAgain();
+        game.deal();
         lastDecision.current = null;
         rerender();
       },
