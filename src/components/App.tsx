@@ -109,6 +109,15 @@ export default function App() {
             recommended={
               phase === 'player' ? decision?.action.best ?? null : null
             }
+            evValues={
+              phase === 'player' && decision
+                ? {
+                    hit: decision.action.hitEv,
+                    stand: decision.action.stand.ev,
+                    double: decision.action.doubleEv,
+                  }
+                : null
+            }
             onDeal={actions.deal}
             onHit={actions.hit}
             onStand={actions.stand}

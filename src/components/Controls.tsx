@@ -1,10 +1,13 @@
 import type { ReactNode } from 'react';
 import { GameSnapshot } from '../game/engine';
+import { ev } from '../lib/format';
 
 interface Props {
   snapshot: GameSnapshot;
   canDouble: boolean;
   recommended: 'hit' | 'stand' | 'double' | null;
+  /** EV in bet units for each action, `null` outside the player's turn. */
+  evValues: { hit: number; stand: number; double: number } | null;
   onDeal: () => void;
   onHit: () => void;
   onStand: () => void;
@@ -49,10 +52,41 @@ function Btn({
   );
 }
 
+function ActionButton({
+  children,
+  onClick,
+  disabled,
+  hint,
+  evValue,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  hint?: boolean;
+  evValue?: number;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <Btn onClick={onClick} disabled={disabled} hint={hint}>
+        {children}
+      </Btn>
+      {evValue !== undefined && Number.isFinite(evValue) && (
+        <span
+          className="tabular text-[11px] font-semibold"
+          style={{ color: evValue >= 0 ? 'var(--win)' : 'var(--loss)' }}
+        >
+          {ev(evValue)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function Controls({
   snapshot,
   canDouble,
   recommended,
+  evValues,
   onDeal,
   onHit,
   onStand,
@@ -74,20 +108,29 @@ export default function Controls({
 
   if (snapshot.phase === 'player') {
     return (
-      <div className="flex flex-wrap gap-2">
-        <Btn onClick={onHit} hint={recommended === 'hit'}>
+      <div className="flex flex-wrap gap-3">
+        <ActionButton
+          onClick={onHit}
+          hint={recommended === 'hit'}
+          evValue={evValues?.hit}
+        >
           Hit
-        </Btn>
-        <Btn onClick={onStand} hint={recommended === 'stand'}>
+        </ActionButton>
+        <ActionButton
+          onClick={onStand}
+          hint={recommended === 'stand'}
+          evValue={evValues?.stand}
+        >
           Stand
-        </Btn>
-        <Btn
+        </ActionButton>
+        <ActionButton
           onClick={onDouble}
           disabled={!canDouble}
           hint={recommended === 'double' && canDouble}
+          evValue={evValues?.double}
         >
           Double
-        </Btn>
+        </ActionButton>
       </div>
     );
   }
