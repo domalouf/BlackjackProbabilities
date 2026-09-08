@@ -13,7 +13,7 @@ interface Props {
   onPlayAgain: () => void;
 }
 
-const CHIPS = [5, 25, 100, 500];
+const CHIPS = [1, 5, 25, 100, 500];
 
 function Btn({
   children,
@@ -62,7 +62,7 @@ export default function Controls({
   onDouble,
   onPlayAgain,
 }: Props) {
-  const [bet, setBet] = useState(25);
+  const [bet, setBet] = useState(1);
 
   useEffect(() => {
     if (bet > snapshot.balance) setBet(snapshot.balance);
