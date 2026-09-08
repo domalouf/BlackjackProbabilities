@@ -70,13 +70,13 @@ body {
 
 .table-grid {
   display: grid;
-  grid-template-areas: 'table' 'controls' 'odds' 'stats';
+  grid-template-areas: 'table' 'controls' 'odds';
 }
 
 @media (min-width: 1024px) {
   .table-grid {
     grid-template-columns: 1fr 20rem;
-    grid-template-areas: 'table odds' 'controls odds' 'stats odds';
+    grid-template-areas: 'table odds' 'controls odds';
   }
 }
 

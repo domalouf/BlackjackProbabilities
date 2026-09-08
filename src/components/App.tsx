@@ -3,7 +3,6 @@ import { GameResult, netResult } from '../game/rules';
 import HandView from './HandView';
 import Controls from './Controls';
 import ProbabilityPanel from './ProbabilityPanel';
-import SessionStats from './SessionStats';
 import TableInfo from './TableInfo';
 import { units } from '../lib/format';
 
@@ -23,7 +22,7 @@ function outcomeTone(result: GameResult): 'win' | 'loss' | 'push' {
 
 export default function App() {
   const { snapshot, decision, actions, canDouble } = useBlackjack();
-  const { phase, player, dealer, result, rules, stats, bet, count } = snapshot;
+  const { phase, player, dealer, result, rules, bet, count } = snapshot;
 
   const playerOutcome =
     phase === 'result' && result ? outcomeTone(result) : null;
@@ -131,10 +130,6 @@ export default function App() {
           decision={decision}
           style={{ gridArea: 'odds' }}
         />
-
-        <div style={{ gridArea: 'stats' }}>
-          <SessionStats stats={stats} />
-        </div>
       </div>
 
       <footer className="text-center text-[11px] leading-relaxed text-[var(--text-muted)]">

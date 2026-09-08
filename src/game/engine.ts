@@ -4,7 +4,6 @@ import {
   determineWinner,
   GameResult,
   HouseRules,
-  netResult,
   shouldDealerHit,
   VEGAS_6_DECK,
 } from './rules';
@@ -18,16 +17,6 @@ import {
 } from '../probability/deckMath';
 
 export type GamePhase = 'betting' | 'player' | 'dealer' | 'result';
-
-export interface SessionStats {
-  handsPlayed: number;
-  wins: number;
-  losses: number;
-  pushes: number;
-  blackjacks: number;
-  /** Net result across the session, in bet units. */
-  net: number;
-}
 
 /** Hi-Lo card count as a player at the table could keep it. */
 export interface CardCount {
@@ -52,20 +41,10 @@ export interface GameSnapshot {
   dealerHoleHidden: boolean;
   result: GameResult | null;
   rules: HouseRules;
-  stats: SessionStats;
   count: CardCount;
   shoePenetration: number;
   reshuffledLastDeal: boolean;
 }
-
-const freshStats = (): SessionStats => ({
-  handsPlayed: 0,
-  wins: 0,
-  losses: 0,
-  pushes: 0,
-  blackjacks: 0,
-  net: 0,
-});
 
 /** Every hand is played for a fixed 1-unit bet; doubling down raises it to 2. */
 const BASE_BET = 1;
@@ -78,7 +57,6 @@ export class BlackjackGame {
   private dealer = new Hand();
   private result: GameResult | null = null;
   private shoe: Shoe;
-  private stats = freshStats();
   private reshuffledLastDeal = false;
 
   constructor(private readonly rules: HouseRules = VEGAS_6_DECK) {
@@ -95,7 +73,6 @@ export class BlackjackGame {
       dealerHoleHidden: this.dealerHoleHidden(),
       result: this.result,
       rules: this.rules,
-      stats: { ...this.stats },
       count: this.cardCount(),
       shoePenetration: this.shoe.penetration(),
       reshuffledLastDeal: this.reshuffledLastDeal,
@@ -179,17 +156,8 @@ export class BlackjackGame {
   }
 
   private finish(): void {
-    const result = determineWinner(this.player, this.dealer);
-    this.result = result;
+    this.result = determineWinner(this.player, this.dealer);
     this.phase = 'result';
-
-    const delta = netResult(result, this.bet, this.rules);
-    this.stats.handsPlayed += 1;
-    this.stats.net += delta;
-    if (result === 'player-blackjack') this.stats.blackjacks += 1;
-    if (delta > 0) this.stats.wins += 1;
-    else if (delta < 0) this.stats.losses += 1;
-    else this.stats.pushes += 1;
   }
 
   // --- Card counting ------------------------------------------------------
