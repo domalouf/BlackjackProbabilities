@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { GameSnapshot } from '../game/engine';
 import { DecisionAnalysis } from '../hooks/useBlackjack';
 import { chanceDealerReaches } from '../probability';
@@ -7,6 +7,7 @@ import { ev, pct } from '../lib/format';
 interface Props {
   snapshot: GameSnapshot;
   decision: DecisionAnalysis | null;
+  style?: CSSProperties;
 }
 
 function StackedBar({
@@ -107,14 +108,14 @@ const ACTION_LABEL: Record<'hit' | 'stand' | 'double', string> = {
   double: 'Double',
 };
 
-export default function ProbabilityPanel({ snapshot, decision }: Props) {
+export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
   const showLive = snapshot.phase === 'player' && decision;
   const dimmed = snapshot.phase !== 'player';
 
   return (
     <div
       className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]"
-      style={{ opacity: dimmed ? 0.6 : 1, transition: 'opacity 150ms' }}
+      style={{ ...style, opacity: dimmed ? 0.6 : 1, transition: 'opacity 150ms' }}
     >
       <div className="flex items-center justify-between px-4 py-3">
         <h2 className="text-sm font-bold">Odds &amp; expected value</h2>

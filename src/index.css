@@ -68,6 +68,18 @@ body {
     radial-gradient(120% 90% at 50% 0%, var(--felt) 0%, var(--felt-edge) 100%);
 }
 
+.table-grid {
+  display: grid;
+  grid-template-areas: 'table' 'controls' 'odds' 'stats';
+}
+
+@media (min-width: 1024px) {
+  .table-grid {
+    grid-template-columns: 1fr 20rem;
+    grid-template-areas: 'table odds' 'controls odds' 'stats odds';
+  }
+}
+
 @keyframes cardIn {
   from {
     opacity: 0;

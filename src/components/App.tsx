@@ -3,7 +3,6 @@ import { GameResult, netResult } from '../game/rules';
 import HandView from './HandView';
 import Controls from './Controls';
 import ProbabilityPanel from './ProbabilityPanel';
-import RunningCount from './RunningCount';
 import SessionStats from './SessionStats';
 import TableInfo from './TableInfo';
 import { money } from '../lib/format';
@@ -61,72 +60,80 @@ export default function App() {
         </div>
       </header>
 
-      <div className="grid flex-1 gap-4 lg:grid-cols-[1fr_20rem]">
-        <div className="flex flex-col gap-4">
-          <div className="felt flex flex-1 flex-col gap-4 rounded-xl p-5 text-white shadow-sm sm:flex-row sm:gap-6 sm:p-7">
-            <div className="flex flex-1 flex-col justify-between gap-8">
-              <HandView
-                hand={dealer}
-                label="Dealer"
-                hideHole={snapshot.dealerHoleHidden}
-                outcome={dealerOutcome}
-              />
-
-              {phase === 'result' && result && (
-                <div className="fade-up text-center">
-                  <div className="text-2xl font-extrabold tracking-tight">
-                    {RESULT_TEXT[result]}
-                  </div>
-                  <div
-                    className="tabular text-sm font-semibold"
-                    style={{
-                      color:
-                        delta > 0
-                          ? 'var(--win)'
-                          : delta < 0
-                            ? 'var(--loss)'
-                            : 'rgba(255,255,255,0.75)',
-                    }}
-                  >
-                    {delta > 0 ? '+' : delta < 0 ? '−' : ''}
-                    {delta !== 0 ? money(Math.abs(delta)) : 'no change'}
-                  </div>
-                </div>
-              )}
-
-              {phase === 'betting' && (
-                <p className="text-center text-sm text-white/70">
-                  Place your bet to deal.
-                </p>
-              )}
-
-              <HandView hand={player} label="You" outcome={playerOutcome} />
-            </div>
-
-            <TableInfo count={count} />
-          </div>
-
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-            <Controls
-              snapshot={snapshot}
-              canDouble={canDouble}
-              recommended={
-                phase === 'player' ? decision?.action.best ?? null : null
-              }
-              onDeal={actions.deal}
-              onHit={actions.hit}
-              onStand={actions.stand}
-              onDouble={actions.double}
-              onPlayAgain={actions.playAgain}
+      <div className="table-grid flex-1 gap-4">
+        <div
+          className="felt flex flex-1 flex-col gap-4 rounded-xl p-5 text-white shadow-sm sm:flex-row sm:gap-6 sm:p-7"
+          style={{ gridArea: 'table' }}
+        >
+          <div className="flex flex-1 flex-col justify-between gap-8">
+            <HandView
+              hand={dealer}
+              label="Dealer"
+              hideHole={snapshot.dealerHoleHidden}
+              outcome={dealerOutcome}
             />
+
+            {phase === 'result' && result && (
+              <div className="fade-up text-center">
+                <div className="text-2xl font-extrabold tracking-tight">
+                  {RESULT_TEXT[result]}
+                </div>
+                <div
+                  className="tabular text-sm font-semibold"
+                  style={{
+                    color:
+                      delta > 0
+                        ? 'var(--win)'
+                        : delta < 0
+                          ? 'var(--loss)'
+                          : 'rgba(255,255,255,0.75)',
+                  }}
+                >
+                  {delta > 0 ? '+' : delta < 0 ? '−' : ''}
+                  {delta !== 0 ? money(Math.abs(delta)) : 'no change'}
+                </div>
+              </div>
+            )}
+
+            {phase === 'betting' && (
+              <p className="text-center text-sm text-white/70">
+                Place your bet to deal.
+              </p>
+            )}
+
+            <HandView hand={player} label="You" outcome={playerOutcome} />
           </div>
 
-          <RunningCount count={count} />
-
-          <SessionStats stats={stats} />
+          <TableInfo count={count} />
         </div>
 
-        <ProbabilityPanel snapshot={snapshot} decision={decision} />
+        <div
+          className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4"
+          style={{ gridArea: 'controls' }}
+        >
+          <Controls
+            snapshot={snapshot}
+            canDouble={canDouble}
+            recommended={
+              phase === 'player' ? decision?.action.best ?? null : null
+            }
+            onDeal={actions.deal}
+            onHit={actions.hit}
+            onStand={actions.stand}
+            onDouble={actions.double}
+            onPlayAgain={actions.playAgain}
+          />
+        </div>
+
+        <ProbabilityPanel
+          snapshot={snapshot}
+          decision={decision}
+          style={{ gridArea: 'odds' }}
+        />
+
+        <div style={{ gridArea: 'stats' }}>
+          <SessionStats stats={stats} />
+        </div>
       </div>
 
       <footer className="text-center text-[11px] leading-relaxed text-[var(--text-muted)]">
