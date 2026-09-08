@@ -4,6 +4,7 @@ import { dealerDistribution } from './dealer';
 import {
   analysePlayerDecision,
   bustChanceOnHit,
+  outcomeIfHit,
   outcomeIfStand,
 } from './player';
 
@@ -49,6 +50,32 @@ describe('outcomeIfStand', () => {
   it('a bust hand always loses', () => {
     const dealer = dealerDistribution([6], makeShoe(6), RULES);
     expect(outcomeIfStand(handValue([10, 10, 5]), dealer).pLoss).toBe(1);
+  });
+});
+
+describe('outcomeIfHit', () => {
+  it('splits into win/push/loss/bust that sum to 1', () => {
+    const o = outcomeIfHit(handValue([10, 6]), makeShoe(6), [6], RULES);
+    expect(o.pWin + o.pPush + o.pLoss + o.pBust).toBeCloseTo(1, 10);
+  });
+
+  it('bust share matches bustChanceOnHit', () => {
+    const shoe = makeShoe(6);
+    const player = handValue([10, 6]);
+    const o = outcomeIfHit(player, shoe.slice(), [6], RULES);
+    expect(o.pBust).toBeCloseTo(bustChanceOnHit(player, shoe), 10);
+  });
+
+  it('does not mutate the shoe', () => {
+    const shoe = makeShoe(6);
+    const before = shoe.slice();
+    outcomeIfHit(handValue([10, 6]), shoe, [6], RULES);
+    expect(shoe).toEqual(before);
+  });
+
+  it('a hard 21 always busts on the next card', () => {
+    const o = outcomeIfHit(handValue([10, 10, 1]), makeShoe(6), [6], RULES);
+    expect(o.pBust).toBe(1);
   });
 });
 

@@ -75,11 +75,57 @@ export function bustChanceOnHit(player: HandValue, shoe: ShoeCounts): number {
   return bustCards / remaining;
 }
 
+export interface HitOutcome {
+  pWin: number;
+  pPush: number;
+  pLoss: number;
+  pBust: number;
+}
+
+/**
+ * Win / push / loss / bust split from drawing exactly one more card and then
+ * standing. Each non-bust branch recomputes the dealer distribution against
+ * the shoe with that card removed, so it stays exact.
+ */
+export function outcomeIfHit(
+  player: HandValue,
+  shoe: ShoeCounts,
+  dealerUpcards: Bucket[],
+  dealerOpts: DealerOptions,
+): HitOutcome {
+  const remaining = shoeSize(shoe);
+  if (remaining === 0) return { pWin: 0, pPush: 0, pLoss: 0, pBust: 1 };
+
+  let pWin = 0;
+  let pPush = 0;
+  let pLoss = 0;
+  let pBust = 0;
+  for (let bucket = 1 as Bucket; bucket <= 10; bucket++) {
+    const available = shoe[bucket];
+    if (available === 0) continue;
+    const p = available / remaining;
+    const next = addCard(player, bucket);
+    if (next.total > 21) {
+      pBust += p;
+      continue;
+    }
+    shoe[bucket] -= 1;
+    const dealer = dealerDistribution(dealerUpcards, shoe, dealerOpts);
+    const stand = outcomeIfStand(next, dealer);
+    shoe[bucket] += 1;
+    pWin += p * stand.pWin;
+    pPush += p * stand.pPush;
+    pLoss += p * stand.pLoss;
+  }
+  return { pWin, pPush, pLoss, pBust };
+}
+
 export interface ActionEV {
   stand: StandOutcome;
+  /** Win / push / loss / bust split from one hit, then standing. */
+  hit: HitOutcome;
   /** EV of hitting, then continuing with best play. */
   hitEv: number;
-  bustChance: number;
   /** EV of doubling: one card, doubled stake, no further draws. */
   doubleEv: number;
   /** `null` until the engine is asked for a recommendation. */
@@ -200,8 +246,8 @@ export function analysePlayerDecision(args: AnalyseArgs): {
 
   const dealer = dealerDistribution(dealerUpcards, working, dealerRules);
   const stand = outcomeIfStand(player, dealer);
-  const bustChance = bustChanceOnHit(player, working);
-  const hit = hitEv(
+  const hit = outcomeIfHit(player, working, dealerUpcards, dealerRules);
+  const hitEvValue = hitEv(
     player,
     working,
     dealerUpcards,
@@ -212,16 +258,17 @@ export function analysePlayerDecision(args: AnalyseArgs): {
     ? doubleEv(player, working, dealerUpcards, dealerRules)
     : -Infinity;
 
-  let best: 'hit' | 'stand' | 'double' = stand.ev >= hit ? 'stand' : 'hit';
-  if (canDouble && dbl > Math.max(stand.ev, hit)) best = 'double';
+  let best: 'hit' | 'stand' | 'double' =
+    stand.ev >= hitEvValue ? 'stand' : 'hit';
+  if (canDouble && dbl > Math.max(stand.ev, hitEvValue)) best = 'double';
 
   return {
     dealer,
     player,
     action: {
       stand,
-      hitEv: hit,
-      bustChance,
+      hit,
+      hitEv: hitEvValue,
       doubleEv: canDouble ? dbl : Number.NaN,
       best,
     },

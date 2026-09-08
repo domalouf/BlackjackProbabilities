@@ -136,6 +136,10 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
 
       {showLive && decision && (
         <>
+          <Section title="Dealer's final hand">
+            <DealerBars dist={decision.dealer} />
+          </Section>
+
           <Section title="If you stand now">
             <StackedBar
               segments={[
@@ -158,22 +162,31 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
             />
           </Section>
 
-          <Section title="If you hit">
-            <div className="flex items-baseline gap-2">
-              <span
-                className="tabular text-2xl font-bold"
-                style={{ color: 'var(--loss)' }}
-              >
-                {pct(decision.action.bustChance)}
-              </span>
-              <span className="text-xs text-[var(--text-muted)]">
-                chance the next card busts you
-              </span>
-            </div>
-          </Section>
-
-          <Section title="Dealer's final hand">
-            <DealerBars dist={decision.dealer} />
+          <Section title="If you hit once, then stand">
+            <StackedBar
+              segments={[
+                {
+                  label: 'Win',
+                  value: decision.action.hit.pWin,
+                  color: 'var(--win)',
+                },
+                {
+                  label: 'Push',
+                  value: decision.action.hit.pPush,
+                  color: 'var(--push)',
+                },
+                {
+                  label: 'Loss',
+                  value: decision.action.hit.pLoss,
+                  color: 'var(--loss)',
+                },
+                {
+                  label: 'Bust',
+                  value: decision.action.hit.pBust,
+                  color: 'color-mix(in srgb, var(--loss) 65%, black)',
+                },
+              ]}
+            />
           </Section>
 
           <Section title="Expected value per action">
