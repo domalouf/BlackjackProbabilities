@@ -48,7 +48,12 @@ export default function HandView({ hand, label, hideHole, outcome }: Props) {
           <div className="h-24 w-16 rounded-lg border border-dashed border-[var(--border)] sm:h-28 sm:w-20" />
         )}
         {cards.map((card, i) => (
-          <CardView key={i} card={card} faceDown={hideHole && i === 0} />
+          <CardView
+            key={i}
+            card={card}
+            faceDown={hideHole && i === 0}
+            dealIndex={i}
+          />
         ))}
       </div>
     </div>
