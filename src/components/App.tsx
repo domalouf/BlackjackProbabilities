@@ -38,7 +38,7 @@ export default function App() {
   const delta = result ? netResult(result, bet, rules) : 0;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-4 px-4 py-6 sm:py-10">
+    <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-3 px-4 py-4 sm:gap-4 sm:py-10">
       <header>
         <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
           Blackjack Probabilities
@@ -50,12 +50,12 @@ export default function App() {
         </p>
       </header>
 
-      <div className="table-grid flex-1 gap-4">
+      <div className="table-grid flex-1 gap-3 sm:gap-4">
         <div
-          className="felt flex flex-1 flex-col gap-4 rounded-xl p-5 text-white shadow-sm sm:flex-row sm:gap-6 sm:p-7"
+          className="felt flex flex-1 flex-col gap-3 rounded-xl p-3 text-white shadow-sm sm:flex-row sm:gap-6 sm:p-7"
           style={{ gridArea: 'table' }}
         >
-          <div className="flex flex-1 flex-col justify-between gap-8">
+          <div className="flex flex-1 flex-col justify-between gap-3 sm:gap-8">
             <HandView
               hand={dealer}
               label="Dealer"
@@ -99,7 +99,7 @@ export default function App() {
         </div>
 
         <div
-          className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4"
+          className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4"
           style={{ gridArea: 'controls' }}
         >
           <Controls

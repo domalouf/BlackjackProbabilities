@@ -16,7 +16,7 @@ export default function CardView({ card, faceDown, dealIndex = 0 }: Props) {
   if (faceDown || !card) {
     return (
       <div
-        className="card-in flex h-24 w-16 items-center justify-center rounded-lg border shadow-sm sm:h-28 sm:w-20"
+        className="card-in flex h-20 w-14 items-center justify-center rounded-lg border shadow-sm sm:h-28 sm:w-20"
         style={{
           ...dealDelay,
           background:
@@ -31,7 +31,7 @@ export default function CardView({ card, faceDown, dealIndex = 0 }: Props) {
   const red = isRedSuit(card.suit);
   return (
     <div
-      className="card-in relative flex h-24 w-16 flex-col justify-between rounded-lg border p-1.5 shadow-sm sm:h-28 sm:w-20 sm:p-2"
+      className="card-in relative flex h-20 w-14 flex-col justify-between rounded-lg border p-1 shadow-sm sm:h-28 sm:w-20 sm:p-2"
       style={{
         ...dealDelay,
         background: 'var(--surface)',
@@ -40,13 +40,13 @@ export default function CardView({ card, faceDown, dealIndex = 0 }: Props) {
       }}
       aria-label={`${card.rank} of ${card.suit}`}
     >
-      <span className="text-sm font-bold leading-none sm:text-base">
+      <span className="text-xs font-bold leading-none sm:text-base">
         {card.rank}
       </span>
-      <span className="self-center text-xl sm:text-2xl">
+      <span className="self-center text-lg sm:text-2xl">
         {SUIT_SYMBOL[card.suit]}
       </span>
-      <span className="rotate-180 self-end text-sm font-bold leading-none sm:text-base">
+      <span className="rotate-180 self-end text-xs font-bold leading-none sm:text-base">
         {card.rank}
       </span>
     </div>
