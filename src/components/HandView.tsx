@@ -49,7 +49,7 @@ export default function HandView({ hand, label, hideHole, outcome }: Props) {
         )}
         {cards.map((card, i) => (
           <CardView
-            key={i}
+            key={card.id ?? i}
             card={card}
             faceDown={hideHole && i === 0}
             dealIndex={i}

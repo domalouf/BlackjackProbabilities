@@ -10,7 +10,7 @@ interface Props {
 
 export default function CardView({ card, faceDown, dealIndex = 0 }: Props) {
   const dealDelay = {
-    '--deal-delay': `${Math.min(dealIndex, 1) * 90}ms`,
+    '--deal-delay': `${Math.min(dealIndex, 1) * 160}ms`,
   } as CSSProperties;
 
   if (faceDown || !card) {

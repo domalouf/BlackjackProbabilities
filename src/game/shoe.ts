@@ -21,6 +21,8 @@ export class Shoe {
   private cards: Card[] = [];
   private dealt: Card[] = [];
   private readonly reshuffleAt: number;
+  /** Monotonic, never reset — every physical deal gets a unique id. */
+  private nextDealId = 0;
 
   constructor(
     private readonly decks: number = 6,
@@ -57,7 +59,7 @@ export class Shoe {
 
   deal(): Card {
     if (this.cards.length === 0) this.reset();
-    const card = this.cards.pop()!;
+    const card = { ...this.cards.pop()!, id: this.nextDealId++ };
     this.dealt.push(card);
     return card;
   }
