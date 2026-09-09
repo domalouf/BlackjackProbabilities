@@ -70,7 +70,7 @@ body {
 
 .table-grid {
   display: grid;
-  grid-template-areas: 'table' 'controls' 'odds';
+  grid-template-areas: 'table' 'odds' 'controls';
 }
 
 @media (min-width: 1024px) {

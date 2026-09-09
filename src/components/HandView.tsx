@@ -45,7 +45,7 @@ export default function HandView({ hand, label, hideHole, outcome }: Props) {
       </div>
       <div className="flex gap-1.5 sm:gap-2">
         {cards.length === 0 && (
-          <div className="h-24 w-16 rounded-lg border border-dashed border-[var(--border)] sm:h-28 sm:w-20" />
+          <div className="h-20 w-14 rounded-lg border border-dashed border-[var(--border)] sm:h-28 sm:w-20" />
         )}
         {cards.map((card, i) => (
           <CardView

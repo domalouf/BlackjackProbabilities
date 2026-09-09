@@ -117,13 +117,13 @@ function DealerBars({
   ];
   const max = Math.max(...rows.map((r) => r.value), 0.01);
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1 sm:space-y-1.5">
       {rows.map((r) => (
         <div key={r.label} className="flex items-center gap-2">
           <span className="tabular w-8 text-right text-xs text-[var(--text-muted)]">
             {r.label}
           </span>
-          <div className="h-3.5 flex-1 rounded-sm bg-[var(--surface-2)]">
+          <div className="h-3 flex-1 rounded-sm bg-[var(--surface-2)] sm:h-3.5">
             <div
               className="h-full rounded-sm"
               style={{
@@ -150,8 +150,8 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="border-t border-[var(--border)] px-4 py-3.5 first:border-t-0">
-      <h3 className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+    <section className="border-t border-[var(--border)] px-3 py-2.5 first:border-t-0 sm:px-4 sm:py-3.5">
+      <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] sm:mb-2.5">
         {title}
       </h3>
       {children}
@@ -181,7 +181,7 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
       className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]"
       style={{ ...style, opacity: dimmed ? 0.6 : 1, transition: 'opacity 150ms' }}
     >
-      <div className="px-4 py-3">
+      <div className="px-3 py-2 sm:px-4 sm:py-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-bold">Odds &amp; expected value</h2>
           <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
@@ -189,7 +189,7 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
           </span>
         </div>
         {showLive && (
-          <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="mt-1.5 flex items-center justify-between gap-2 sm:mt-2">
             <ModeToggle mode={mode} onChange={setMode} />
             {baseline && (
               <span className="text-[10px] leading-tight text-[var(--text-muted)]">
@@ -205,8 +205,11 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
           <p className="text-xs leading-relaxed text-[var(--text-muted)]">
             Place a bet and deal. Once you have a hand, this panel shows the
             exact probability of every outcome — computed from the cards left
-            in the shoe, not a lookup table. Switch to "Counting" to see how
-            those odds shift once the shoe's depletion is factored in.
+            in the shoe, not a lookup table.{' '}
+            <span className="hidden sm:inline">
+              Switch to "Counting" to see how those odds shift once the
+              shoe's depletion is factored in.
+            </span>
           </p>
         </Section>
       )}
@@ -331,7 +334,7 @@ export default function ProbabilityPanel({ snapshot, decision, style }: Props) {
                 })}
               </tbody>
             </table>
-            <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-muted)]">
+            <p className="mt-2 hidden text-[11px] leading-relaxed text-[var(--text-muted)] sm:block">
               EV in bet units: an EV of {ev(active.action.stand.ev)} means that
               action returns, on average, {ev(active.action.stand.ev)} times
               your stake.{' '}
