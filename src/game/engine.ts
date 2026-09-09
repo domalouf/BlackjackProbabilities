@@ -4,8 +4,6 @@ import {
   determineWinner,
   GameResult,
   HouseRules,
-  netResult,
-  settle,
   shouldDealerHit,
   VEGAS_6_DECK,
 } from './rules';
@@ -19,18 +17,6 @@ import {
 } from '../probability/deckMath';
 
 export type GamePhase = 'betting' | 'player' | 'dealer' | 'result';
-
-export interface SessionStats {
-  handsPlayed: number;
-  wins: number;
-  losses: number;
-  pushes: number;
-  blackjacks: number;
-  /** Net bankroll change across the session. */
-  net: number;
-  /** Peak bankroll seen this session. */
-  peak: number;
-}
 
 /** Hi-Lo card count as a player at the table could keep it. */
 export interface CardCount {
@@ -46,7 +32,6 @@ export interface CardCount {
 
 export interface GameSnapshot {
   phase: GamePhase;
-  balance: number;
   bet: number;
   /** True once the bet has been doubled this hand. */
   doubled: boolean;
@@ -56,47 +41,31 @@ export interface GameSnapshot {
   dealerHoleHidden: boolean;
   result: GameResult | null;
   rules: HouseRules;
-  stats: SessionStats;
   count: CardCount;
   shoePenetration: number;
   reshuffledLastDeal: boolean;
 }
 
-const freshStats = (): SessionStats => ({
-  handsPlayed: 0,
-  wins: 0,
-  losses: 0,
-  pushes: 0,
-  blackjacks: 0,
-  net: 0,
-  peak: 0,
-});
+/** Every hand is played for a fixed 1-unit bet; doubling down raises it to 2. */
+const BASE_BET = 1;
 
 export class BlackjackGame {
   private phase: GamePhase = 'betting';
-  private balance: number;
-  private bet = 0;
+  private bet = BASE_BET;
   private doubled = false;
   private player = new Hand();
   private dealer = new Hand();
   private result: GameResult | null = null;
   private shoe: Shoe;
-  private stats = freshStats();
   private reshuffledLastDeal = false;
 
-  constructor(
-    initialBalance = 1000,
-    private readonly rules: HouseRules = VEGAS_6_DECK,
-  ) {
-    this.balance = initialBalance;
-    this.stats.peak = initialBalance;
+  constructor(private readonly rules: HouseRules = VEGAS_6_DECK) {
     this.shoe = new Shoe(rules.decks);
   }
 
   snapshot(): GameSnapshot {
     return {
       phase: this.phase,
-      balance: this.balance,
       bet: this.bet,
       doubled: this.doubled,
       player: this.player,
@@ -104,7 +73,6 @@ export class BlackjackGame {
       dealerHoleHidden: this.dealerHoleHidden(),
       result: this.result,
       rules: this.rules,
-      stats: { ...this.stats },
       count: this.cardCount(),
       shoePenetration: this.shoe.penetration(),
       reshuffledLastDeal: this.reshuffledLastDeal,
@@ -113,21 +81,14 @@ export class BlackjackGame {
 
   // --- Betting -------------------------------------------------------------
 
-  canBet(amount: number): boolean {
-    return (
-      this.phase === 'betting' && amount > 0 && amount <= this.balance
-    );
-  }
-
-  deal(amount: number): void {
-    if (!this.canBet(amount)) throw new Error('Invalid bet');
+  deal(): void {
+    if (this.phase !== 'betting') throw new Error('Not in betting phase');
 
     this.reshuffledLastDeal = this.shoe.needsReshuffle();
     if (this.reshuffledLastDeal) this.shoe.reset();
 
-    this.bet = amount;
+    this.bet = BASE_BET;
     this.doubled = false;
-    this.balance -= amount;
     this.player.clear();
     this.dealer.clear();
     this.result = null;
@@ -148,11 +109,7 @@ export class BlackjackGame {
   // --- Player actions ----------------------------------------------------
 
   get canDouble(): boolean {
-    return (
-      this.phase === 'player' &&
-      this.player.getSize() === 2 &&
-      this.balance >= this.bet
-    );
+    return this.phase === 'player' && this.player.getSize() === 2;
   }
 
   hit(): void {
@@ -168,7 +125,6 @@ export class BlackjackGame {
 
   doubleDown(): void {
     if (!this.canDouble) throw new Error('Cannot double down now');
-    this.balance -= this.bet;
     this.bet *= 2;
     this.doubled = true;
     this.player.add(this.shoe.deal());
@@ -182,7 +138,7 @@ export class BlackjackGame {
   playAgain(): void {
     if (this.phase !== 'result') throw new Error('Hand not finished');
     this.phase = 'betting';
-    this.bet = 0;
+    this.bet = BASE_BET;
     this.doubled = false;
     this.result = null;
   }
@@ -200,19 +156,8 @@ export class BlackjackGame {
   }
 
   private finish(): void {
-    const result = determineWinner(this.player, this.dealer);
-    this.result = result;
+    this.result = determineWinner(this.player, this.dealer);
     this.phase = 'result';
-    this.balance += settle(result, this.bet, this.rules);
-
-    const delta = netResult(result, this.bet, this.rules);
-    this.stats.handsPlayed += 1;
-    this.stats.net += delta;
-    this.stats.peak = Math.max(this.stats.peak, this.balance);
-    if (result === 'player-blackjack') this.stats.blackjacks += 1;
-    if (delta > 0) this.stats.wins += 1;
-    else if (delta < 0) this.stats.losses += 1;
-    else this.stats.pushes += 1;
   }
 
   // --- Card counting ------------------------------------------------------
@@ -247,12 +192,29 @@ export class BlackjackGame {
   // --- Probability-engine input ---------------------------------------------
 
   /**
-   * Shoe composition as the *player* sees it: a full shoe minus every card
-   * currently face-up on the table. The dealer's hole card is deliberately
-   * left in — the player does not know it, so the engine must treat it as an
-   * unknown draw.
+   * Shoe composition as a player *counting the shoe* knows it: every card
+   * dealt since the last shuffle is removed, exactly reflecting how depleted
+   * the shoe really is. The dealer's hole card is added back in — a counter
+   * has seen it get dealt, but not what it is, so the engine must still treat
+   * it as an unknown draw.
    */
-  visibleShoeCounts(): ShoeCounts {
+  countingShoeCounts(): ShoeCounts {
+    const counts = this.shoe.remainingCounts();
+    const dealerCards = this.dealer.getCards();
+    if (this.dealerHoleHidden() && dealerCards.length > 0) {
+      counts[rankToBucket(dealerCards[0].rank)] += 1;
+    }
+    return counts;
+  }
+
+  /**
+   * Shoe composition as a player with *no memory of earlier hands* would
+   * assume it: a fresh full shoe minus only the cards visible on the table
+   * right now. Cards used up by previous hands this shoe are not tracked —
+   * this is the standard "infinite shoe" assumption basic-strategy tables
+   * are built on.
+   */
+  freshShoeCounts(): ShoeCounts {
     const counts = makeShoe(this.rules.decks);
     const remove = (cards: Card[]) => {
       for (const c of cards) counts[rankToBucket(c.rank)] -= 1;

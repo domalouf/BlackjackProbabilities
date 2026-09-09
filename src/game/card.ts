@@ -5,6 +5,13 @@ export type Rank =
 export interface Card {
   suit: Suit;
   rank: Rank;
+  /**
+   * Unique per physical deal, assigned by {@link Shoe.deal}. Lets the UI key
+   * each card by the actual deal rather than its slot in the hand, so the
+   * deal-in animation replays every time — including when a new hand reuses
+   * the same slot index as a previous one.
+   */
+  id?: number;
 }
 
 export const SUIT_SYMBOL: Record<Suit, string> = {

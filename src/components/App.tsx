@@ -3,9 +3,8 @@ import { GameResult, netResult } from '../game/rules';
 import HandView from './HandView';
 import Controls from './Controls';
 import ProbabilityPanel from './ProbabilityPanel';
-import RunningCount from './RunningCount';
-import SessionStats from './SessionStats';
-import { money } from '../lib/format';
+import TableInfo from './TableInfo';
+import { units } from '../lib/format';
 
 const RESULT_TEXT: Record<GameResult, string> = {
   'player-blackjack': 'Blackjack!',
@@ -23,8 +22,7 @@ function outcomeTone(result: GameResult): 'win' | 'loss' | 'push' {
 
 export default function App() {
   const { snapshot, decision, actions, canDouble } = useBlackjack();
-  const { phase, player, dealer, result, rules, stats, balance, bet, count } =
-    snapshot;
+  const { phase, player, dealer, result, rules, bet, count } = snapshot;
 
   const playerOutcome =
     phase === 'result' && result ? outcomeTone(result) : null;
@@ -41,28 +39,23 @@ export default function App() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-4 px-4 py-6 sm:py-10">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-            Blackjack Probabilities
-          </h1>
-          <p className="text-xs text-[var(--text-muted)]">
-            {rules.decks}-deck shoe · dealer{' '}
-            {rules.hitSoft17 ? 'hits' : 'stands'} soft 17 · blackjack pays{' '}
-            {rules.blackjackPayout === 1.5 ? '3:2' : `${rules.blackjackPayout}:1`}
-          </p>
-        </div>
-        <div className="text-right">
-          <div className="text-[10px] uppercase tracking-wide text-[var(--text-muted)]">
-            Balance
-          </div>
-          <div className="tabular text-lg font-bold">{money(balance)}</div>
-        </div>
+      <header>
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+          Blackjack Probabilities
+        </h1>
+        <p className="text-xs text-[var(--text-muted)]">
+          {rules.decks}-deck shoe · dealer{' '}
+          {rules.hitSoft17 ? 'hits' : 'stands'} soft 17 · blackjack pays{' '}
+          {rules.blackjackPayout === 1.5 ? '3:2' : `${rules.blackjackPayout}:1`}
+        </p>
       </header>
 
-      <div className="grid flex-1 gap-4 lg:grid-cols-[1fr_20rem]">
-        <div className="flex flex-col gap-4">
-          <div className="felt flex flex-1 flex-col justify-between gap-8 rounded-xl p-5 text-white shadow-sm sm:p-7">
+      <div className="table-grid flex-1 gap-4">
+        <div
+          className="felt flex flex-1 flex-col gap-4 rounded-xl p-5 text-white shadow-sm sm:flex-row sm:gap-6 sm:p-7"
+          style={{ gridArea: 'table' }}
+        >
+          <div className="flex flex-1 flex-col justify-between gap-8">
             <HandView
               hand={dealer}
               label="Dealer"
@@ -86,42 +79,57 @@ export default function App() {
                           : 'rgba(255,255,255,0.75)',
                   }}
                 >
-                  {delta > 0 ? '+' : delta < 0 ? '−' : ''}
-                  {delta !== 0 ? money(Math.abs(delta)) : 'no change'}
+                  {delta !== 0
+                    ? `${units(delta)} unit${Math.abs(delta) === 1 ? '' : 's'}`
+                    : 'push'}
                 </div>
               </div>
             )}
 
             {phase === 'betting' && (
               <p className="text-center text-sm text-white/70">
-                Place your bet to deal.
+                Deal to play — 1 unit per hand.
               </p>
             )}
 
             <HandView hand={player} label="You" outcome={playerOutcome} />
           </div>
 
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-            <Controls
-              snapshot={snapshot}
-              canDouble={canDouble}
-              recommended={
-                phase === 'player' ? decision?.action.best ?? null : null
-              }
-              onDeal={actions.deal}
-              onHit={actions.hit}
-              onStand={actions.stand}
-              onDouble={actions.double}
-              onPlayAgain={actions.playAgain}
-            />
-          </div>
-
-          <RunningCount count={count} />
-
-          <SessionStats stats={stats} />
+          <TableInfo count={count} />
         </div>
 
-        <ProbabilityPanel snapshot={snapshot} decision={decision} />
+        <div
+          className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4"
+          style={{ gridArea: 'controls' }}
+        >
+          <Controls
+            snapshot={snapshot}
+            canDouble={canDouble}
+            recommended={
+              phase === 'player' ? decision?.counting.action.best ?? null : null
+            }
+            evValues={
+              phase === 'player' && decision
+                ? {
+                    hit: decision.counting.action.hitEv,
+                    stand: decision.counting.action.stand.ev,
+                    double: decision.counting.action.doubleEv,
+                  }
+                : null
+            }
+            onDeal={actions.deal}
+            onHit={actions.hit}
+            onStand={actions.stand}
+            onDouble={actions.double}
+            onPlayAgain={actions.playAgain}
+          />
+        </div>
+
+        <ProbabilityPanel
+          snapshot={snapshot}
+          decision={decision}
+          style={{ gridArea: 'odds' }}
+        />
       </div>
 
       <footer className="text-center text-[11px] leading-relaxed text-[var(--text-muted)]">

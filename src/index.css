@@ -68,10 +68,22 @@ body {
     radial-gradient(120% 90% at 50% 0%, var(--felt) 0%, var(--felt-edge) 100%);
 }
 
+.table-grid {
+  display: grid;
+  grid-template-areas: 'table' 'controls' 'odds';
+}
+
+@media (min-width: 1024px) {
+  .table-grid {
+    grid-template-columns: 1fr 20rem;
+    grid-template-areas: 'table odds' 'controls odds';
+  }
+}
+
 @keyframes cardIn {
   from {
     opacity: 0;
-    transform: translateY(-8px) rotate(-3deg);
+    transform: translate(64px, -36px) rotate(12deg) scale(0.92);
   }
   to {
     opacity: 1;
@@ -80,7 +92,8 @@ body {
 }
 
 .card-in {
-  animation: cardIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: cardIn 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--deal-delay, 0ms);
 }
 
 @keyframes barGrow {
