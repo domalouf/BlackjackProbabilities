@@ -1,9 +1,11 @@
-import { useBlackjack } from '../hooks/useBlackjack';
+import { useState } from 'react';
+import { DecisionAnalysis, useBlackjack } from '../hooks/useBlackjack';
 import { GameResult, netResult } from '../game/rules';
 import HandView from './HandView';
 import Controls from './Controls';
-import ProbabilityPanel from './ProbabilityPanel';
+import { DealerOdds, ModeToggle, OddsMode, PlayerOdds } from './Odds';
 import TableInfo from './TableInfo';
+import TableMarkings from './TableMarkings';
 import { units } from '../lib/format';
 
 const RESULT_TEXT: Record<GameResult, string> = {
@@ -20,9 +22,16 @@ function outcomeTone(result: GameResult): 'win' | 'loss' | 'push' {
   return 'loss';
 }
 
+const actionEvs = (a: DecisionAnalysis) => ({
+  hit: a.action.hitEv,
+  stand: a.action.stand.ev,
+  double: a.action.doubleEv,
+});
+
 export default function App() {
   const { snapshot, decision, actions, canDouble } = useBlackjack();
   const { phase, player, dealer, result, rules, bet, count } = snapshot;
+  const [mode, setMode] = useState<OddsMode>('noCount');
 
   const playerOutcome =
     phase === 'result' && result ? outcomeTone(result) : null;
@@ -37,86 +46,93 @@ export default function App() {
 
   const delta = result ? netResult(result, bet, rules) : 0;
 
+  // One mode drives every figure on the table — the odds and the button EVs.
+  const active = decision ? decision[mode] : null;
+  const baseline = decision && mode === 'counting' ? decision.noCount : null;
+  const live = phase === 'player' && active !== null;
+  const stale = !live && active !== null;
+
+  const evValues = live ? actionEvs(active) : null;
+  const baseEvs = live && baseline ? actionEvs(baseline) : null;
+  const evDeltas =
+    evValues && baseEvs
+      ? {
+          hit: evValues.hit - baseEvs.hit,
+          stand: evValues.stand - baseEvs.stand,
+          double: evValues.double - baseEvs.double,
+        }
+      : null;
+
+  const announcement =
+    phase === 'result' && result ? (
+      <div className="fade-up rounded-2xl bg-black/35 px-6 py-2 text-center shadow-lg backdrop-blur-sm">
+        <div className="serif text-2xl font-bold tracking-tight text-[var(--ink)] sm:text-3xl">
+          {RESULT_TEXT[result]}
+        </div>
+        <div
+          className="tabular text-sm font-semibold"
+          style={{
+            color:
+              delta > 0
+                ? 'var(--win)'
+                : delta < 0
+                  ? 'var(--loss)'
+                  : 'var(--text-muted)',
+          }}
+        >
+          {delta !== 0
+            ? `${units(delta)} unit${Math.abs(delta) === 1 ? '' : 's'}`
+            : 'bet returned'}
+        </div>
+      </div>
+    ) : undefined;
+
   return (
-    <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-3 px-4 py-4 sm:gap-4 sm:py-10">
-      <header>
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+    <div className="mx-auto flex min-h-screen max-w-[56rem] flex-col gap-4 px-4 py-4 sm:gap-6 sm:py-8">
+      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <h1 className="serif text-2xl font-bold tracking-tight text-[var(--ink)] sm:text-3xl">
           Blackjack Probabilities
         </h1>
-        <p className="text-xs text-[var(--text-muted)]">
-          {rules.decks}-deck shoe · dealer{' '}
-          {rules.hitSoft17 ? 'hits' : 'stands'} soft 17 · blackjack pays{' '}
-          {rules.blackjackPayout === 1.5 ? '3:2' : `${rules.blackjackPayout}:1`}
-        </p>
+        <div className="flex grow flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:grow-0 sm:gap-x-5">
+          <TableInfo count={count} />
+          <ModeToggle mode={mode} onChange={setMode} />
+        </div>
       </header>
 
-      <div className="table-grid flex-1 gap-3 sm:gap-4">
-        <div
-          className="felt flex flex-1 flex-col gap-3 rounded-xl p-3 text-white shadow-sm sm:flex-row sm:gap-6 sm:p-7"
-          style={{ gridArea: 'table' }}
-        >
-          <div className="flex flex-1 flex-col justify-between gap-3 sm:gap-8">
-            <HandView
-              hand={dealer}
-              label="Dealer"
-              hideHole={snapshot.dealerHoleHidden}
-              outcome={dealerOutcome}
-            />
-
-            {phase === 'result' && result && (
-              <div className="fade-up text-center">
-                <div className="text-2xl font-extrabold tracking-tight">
-                  {RESULT_TEXT[result]}
-                </div>
-                <div
-                  className="tabular text-sm font-semibold"
-                  style={{
-                    color:
-                      delta > 0
-                        ? 'var(--win)'
-                        : delta < 0
-                          ? 'var(--loss)'
-                          : 'rgba(255,255,255,0.75)',
-                  }}
-                >
-                  {delta !== 0
-                    ? `${units(delta)} unit${Math.abs(delta) === 1 ? '' : 's'}`
-                    : 'push'}
-                </div>
-              </div>
-            )}
-
-            {phase === 'betting' && (
-              <p className="text-center text-sm text-white/70">
-                Deal to play — 1 unit per hand.
-              </p>
-            )}
-
-            <HandView hand={player} label="You" outcome={playerOutcome} />
-          </div>
-
-          <TableInfo count={count} />
+      <main className="table-layout flex-1 gap-x-12 gap-y-4 sm:gap-y-5">
+        <div style={{ gridArea: 'dealer' }}>
+          <HandView
+            hand={dealer}
+            label="Dealer"
+            hideHole={snapshot.dealerHoleHidden}
+            outcome={dealerOutcome}
+          />
         </div>
 
-        <div
-          className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 sm:p-4"
-          style={{ gridArea: 'controls' }}
-        >
+        <DealerOdds
+          active={active}
+          baseline={baseline}
+          stale={stale}
+          style={{ gridArea: 'dealer-odds' }}
+        />
+
+        <TableMarkings
+          rules={rules}
+          announcement={announcement}
+          style={{ gridArea: 'middle' }}
+        />
+
+        <div style={{ gridArea: 'player' }}>
+          <HandView hand={player} label="You" outcome={playerOutcome} />
+        </div>
+
+        <div style={{ gridArea: 'actions' }}>
           <Controls
             snapshot={snapshot}
             canDouble={canDouble}
-            recommended={
-              phase === 'player' ? decision?.counting.action.best ?? null : null
-            }
-            evValues={
-              phase === 'player' && decision
-                ? {
-                    hit: decision.counting.action.hitEv,
-                    stand: decision.counting.action.stand.ev,
-                    double: decision.counting.action.doubleEv,
-                  }
-                : null
-            }
+            recommended={live ? active.action.best : null}
+            evValues={evValues}
+            evDeltas={evDeltas}
             onDeal={actions.deal}
             onHit={actions.hit}
             onStand={actions.stand}
@@ -125,12 +141,14 @@ export default function App() {
           />
         </div>
 
-        <ProbabilityPanel
-          snapshot={snapshot}
-          decision={decision}
-          style={{ gridArea: 'odds' }}
+        <PlayerOdds
+          active={active}
+          baseline={baseline}
+          stale={stale}
+          mode={mode}
+          style={{ gridArea: 'player-odds' }}
         />
-      </div>
+      </main>
 
       <footer className="text-center text-[11px] leading-relaxed text-[var(--text-muted)]">
         Probabilities are exact: every dealer draw is enumerated against the

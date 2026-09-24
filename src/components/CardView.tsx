@@ -16,13 +16,8 @@ export default function CardView({ card, faceDown, dealIndex = 0 }: Props) {
   if (faceDown || !card) {
     return (
       <div
-        className="card-in flex h-20 w-14 items-center justify-center rounded-lg border shadow-sm sm:h-28 sm:w-20"
-        style={{
-          ...dealDelay,
-          background:
-            'repeating-linear-gradient(45deg, var(--accent) 0 6px, color-mix(in srgb, var(--accent) 70%, black) 6px 12px)',
-          borderColor: 'var(--border)',
-        }}
+        className="card-in card-back h-20 w-14 rounded-lg sm:h-28 sm:w-20"
+        style={dealDelay}
         aria-label="face-down card"
       />
     );
@@ -31,12 +26,10 @@ export default function CardView({ card, faceDown, dealIndex = 0 }: Props) {
   const red = isRedSuit(card.suit);
   return (
     <div
-      className="card-in relative flex h-20 w-14 flex-col justify-between rounded-lg border p-1 shadow-sm sm:h-28 sm:w-20 sm:p-2"
+      className="card-in playing-card relative flex h-20 w-14 flex-col justify-between rounded-lg p-1 sm:h-28 sm:w-20 sm:p-2"
       style={{
         ...dealDelay,
-        background: 'var(--surface)',
-        borderColor: 'var(--border)',
-        color: red ? 'var(--loss)' : 'var(--text)',
+        color: red ? 'var(--card-red)' : 'var(--card-ink)',
       }}
       aria-label={`${card.rank} of ${card.suit}`}
     >
