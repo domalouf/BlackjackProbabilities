@@ -2,41 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * The whole page is the table: a green felt surface with cream "printed"
+ * markings, white playing cards, and gold for the house's highlights. The felt
+ * reads the same in light and dark mode, only a shade deeper in dark.
+ */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --surface-2: #eef0f3;
-  --border: #e2e5ea;
-  --text: #1a1d23;
-  --text-muted: #6b7280;
-  --felt: #0f7b52;
-  --felt-edge: #0a5c3d;
+  --felt: #177a50;
+  --felt-edge: #0b4a31;
 
-  --accent: #4f46e5;
-  --win: #159f6e;
-  --loss: #e5484d;
-  --push: #b58a2b;
-  --neutral: #8b93a1;
+  --ink: #f4eedc;
+  --text: #ffffff;
+  --text-muted: rgba(244, 238, 220, 0.68);
+  --line: rgba(244, 238, 220, 0.22);
+  --track: rgba(0, 0, 0, 0.24);
+  --chip: rgba(0, 0, 0, 0.24);
+  --chip-hover: rgba(0, 0, 0, 0.36);
+  --neutral: rgba(244, 238, 220, 0.55);
+
+  --gold: #f5c451;
+  --gold-ink: #2b1f00;
+  --win: #62e3a3;
+  --loss: #ff7b73;
+  --bust: #c9463f;
+  --push: #e2b25a;
+
+  --card: #fbf9f3;
+  --card-ink: #1c1c20;
+  --card-red: #c8243a;
+  --card-back: #a8202c;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0d0f13;
-    --surface: #161a21;
-    --surface-2: #1e232c;
-    --border: #2a303b;
-    --text: #e8eaed;
-    --text-muted: #9aa3b2;
-    --felt: #0c5c3e;
-    --felt-edge: #063f2a;
-
-    --accent: #7c74ff;
-    --win: #2fca92;
-    --loss: #ff6b6f;
-    --push: #d8a84a;
-    --neutral: #6b7482;
+    --felt: #11663f;
+    --felt-edge: #073a25;
   }
 }
 
@@ -51,11 +53,28 @@ body {
 }
 
 body {
-  background: var(--bg);
+  background: var(--felt-edge);
   color: var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
     Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Felt: a fibre-noise texture blended over a lit-from-above green, with a
+ * vignette toward the rail. Pinned to the viewport so the cloth never scrolls.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 130% 100% at 50% 30%, transparent 45%, rgba(0, 0, 0, 0.5) 100%),
+    radial-gradient(ellipse 90% 75% at 50% 30%, var(--felt) 0%, var(--felt-edge) 100%);
+  background-blend-mode: soft-light, normal, normal;
 }
 
 .tabular {
@@ -63,21 +82,56 @@ body {
   font-feature-settings: 'tnum';
 }
 
-.felt {
-  background:
-    radial-gradient(120% 90% at 50% 0%, var(--felt) 0%, var(--felt-edge) 100%);
+.serif {
+  font-family: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
 }
 
-.table-grid {
+/*
+ * One surface, two arrangements. Phones read top to bottom: dealer and the
+ * dealer's odds, the table markings, then your hand, your buttons and your
+ * odds. On wide screens the odds sit beside the hand they describe.
+ */
+.table-layout {
   display: grid;
-  grid-template-areas: 'table' 'odds' 'controls';
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  grid-template-areas:
+    'dealer'
+    'dealer-odds'
+    'middle'
+    'player'
+    'actions'
+    'player-odds';
 }
 
 @media (min-width: 1024px) {
-  .table-grid {
-    grid-template-columns: 1fr 20rem;
-    grid-template-areas: 'table odds' 'controls odds';
+  .table-layout {
+    grid-template-columns: minmax(0, 1fr) 19rem;
+    grid-template-areas:
+      'dealer  dealer-odds'
+      'middle  dealer-odds'
+      'player  player-odds'
+      'actions player-odds';
   }
+}
+
+.playing-card {
+  background: var(--card);
+  color: var(--card-ink);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 6px 14px rgba(0, 0, 0, 0.28);
+}
+
+.card-back {
+  border: 3px solid var(--card);
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.16) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.16) 0 2px, transparent 2px 7px),
+    var(--card-back);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 6px 14px rgba(0, 0, 0, 0.28);
 }
 
 @keyframes cardIn {
@@ -94,15 +148,6 @@ body {
 .card-in {
   animation: cardIn 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: var(--deal-delay, 0ms);
-}
-
-@keyframes barGrow {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
 }
 
 @keyframes fadeUp {
