@@ -26,7 +26,7 @@ assumes an infinitely large deck. This one enumerates the actual game tree:
 - Before each hand it works out **your edge**: the exact EV of the whole round —
   every opening deal, each played perfectly — against the shoe as it stands.
   With a full shoe that's the house edge (−0.58% under these rules); as the shoe
-  depletes it swings with the count, and the suggested bet follows it.
+  depletes it swings with the count.
 
 Because it reads the live shoe, the odds shift as the shoe depletes — exactly
 what a card counter is tracking.
@@ -58,7 +58,7 @@ Las Vegas 6-deck standard, set in `src/game/rules.ts`:
 | Split | Any pair of equal value, once (two hands); split aces get one card each; 21 after a split pays 1:1 |
 | Surrender | Late (after the peek), first two cards only |
 | Insurance | Offered against an Ace, pays 2:1; even money on a blackjack |
-| Bet | 1, 2, 4 or 8 units a hand |
+| Bet | 1 unit a hand (2 after doubling) |
 
 ## Tech stack
 
@@ -84,7 +84,7 @@ src/
 ├── workers/edge.worker.ts  Runs edge calculations off the main thread
 ├── hooks/useBlackjack.ts   Bridges the engine to React
 ├── components/         UI
-└── lib/                Formatting, bet sizing, the edge worker pool
+└── lib/                Formatting, the edge worker pool
 ```
 
 ## Development

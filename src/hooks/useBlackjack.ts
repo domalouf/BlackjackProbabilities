@@ -190,15 +190,15 @@ export function useBlackjack(rules: HouseRules = VEGAS_6_DECK) {
       rerender();
     };
     return {
-      deal: (bet: number) => {
+      deal: () => {
         lastDecision.current = null;
-        game.deal(bet);
+        game.deal();
         rerender();
       },
-      playAgain: (bet: number) => {
+      playAgain: () => {
         lastDecision.current = null;
         game.playAgain();
-        game.deal(bet);
+        game.deal();
         rerender();
       },
       takeInsurance: act(() => game.takeInsurance()),

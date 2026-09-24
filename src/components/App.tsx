@@ -8,7 +8,6 @@ import Controls, { InsuranceOffer } from './Controls';
 import { DealerOdds, ModeToggle, OddsMode, PlayerOdds } from './Odds';
 import TableInfo from './TableInfo';
 import TableMarkings from './TableMarkings';
-import { suggestedBet } from '../lib/betting';
 import { units } from '../lib/format';
 
 const RESULT_TEXT: Record<GameResult, string> = {
@@ -84,7 +83,6 @@ export default function App() {
     useBlackjack();
   const { phase, hands, activeHand, dealer, rules, count } = snapshot;
   const [mode, setMode] = useState<OddsMode>('noCount');
-  const [bet, setBet] = useState(1);
 
   const settled = phase === 'result';
   const net = snapshot.net ?? 0;
@@ -222,15 +220,12 @@ export default function App() {
             evValues={evValues}
             evDeltas={evDeltas}
             insurance={insuranceOffer}
-            betting={{
-              bet,
-              onBet: setBet,
+            nextHand={{
               edge: shownEdge,
               edgeDelta,
-              suggested: shownEdge === null ? null : suggestedBet(shownEdge),
               newShoe: snapshot.reshuffleNext,
             }}
-            onDeal={() => actions.deal(bet)}
+            onDeal={actions.deal}
             onHit={actions.hit}
             onStand={actions.stand}
             onDouble={actions.double}
@@ -238,7 +233,7 @@ export default function App() {
             onSurrender={actions.surrender}
             onTakeInsurance={actions.takeInsurance}
             onDeclineInsurance={actions.declineInsurance}
-            onPlayAgain={() => actions.playAgain(bet)}
+            onPlayAgain={actions.playAgain}
           />
         </div>
 

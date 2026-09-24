@@ -72,8 +72,6 @@ export interface GameSnapshot {
   dealerHoleHidden: boolean;
   /** Insurance offered this hand, `null` if the dealer didn't show an Ace. */
   insurance: Insurance | null;
-  /** Units bet on the hand when it was dealt. */
-  baseBet: number;
   /** Net units won or lost this hand, insurance included; `null` until settled. */
   net: number | null;
   rules: HouseRules;
@@ -86,7 +84,7 @@ export interface GameSnapshot {
   version: number;
 }
 
-/** A hand is played for 1 unit unless the player bets more. */
+/** Every hand is played for 1 unit; doubling or splitting adds more. */
 const BASE_BET = 1;
 
 const newHand = (bet: number, fromSplit = false): PlayerHand => ({
@@ -101,7 +99,6 @@ const newHand = (bet: number, fromSplit = false): PlayerHand => ({
 
 export class BlackjackGame {
   private phase: GamePhase = 'betting';
-  private baseBet = BASE_BET;
   private hands: PlayerHand[] = [newHand(BASE_BET)];
   private active = 0;
   private dealer = new Hand();
@@ -125,7 +122,6 @@ export class BlackjackGame {
       dealer: this.dealer,
       dealerHoleHidden: this.dealerHoleHidden(),
       insurance: this.insurance && { ...this.insurance },
-      baseBet: this.baseBet,
       net: this.phase === 'result' ? this.net() : null,
       rules: this.rules,
       count: this.cardCount(),
@@ -138,15 +134,14 @@ export class BlackjackGame {
 
   // --- Betting -------------------------------------------------------------
 
-  deal(bet: number = BASE_BET): void {
+  deal(): void {
     if (this.phase !== 'betting') throw new Error('Not in betting phase');
     this.version++;
 
     this.reshuffledLastDeal = this.shoe.needsReshuffle();
     if (this.reshuffledLastDeal) this.shoe.reset();
 
-    this.baseBet = bet;
-    this.hands = [newHand(bet)];
+    this.hands = [newHand(BASE_BET)];
     this.active = 0;
     this.dealer.clear();
     this.insurance = null;
@@ -160,7 +155,7 @@ export class BlackjackGame {
     // An Ace up: offer insurance before the dealer checks for blackjack.
     if (this.dealer.getCards()[1].rank === 'A') {
       this.insurance = {
-        bet: bet / 2,
+        bet: BASE_BET / 2,
         taken: null,
         evenMoney: player.isBlackjack(),
       };

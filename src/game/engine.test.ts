@@ -58,15 +58,15 @@ describe('dealer plays card by card', () => {
 });
 
 describe('bet size', () => {
-  it('plays the hand for the units bet, doubled on a double down', () => {
+  it('plays every hand for 1 unit, doubled to 2 on a double down', () => {
     const game = scripted('6', '10', '5', '7', '10');
-    game.deal(4);
-    expect(game.snapshot().hands[0].bet).toBe(4);
+    game.deal();
+    expect(game.snapshot().hands[0].bet).toBe(1);
     game.doubleDown(); // 6-5-10 = 21 vs 17
     game.playDealerOut();
     const s = game.snapshot();
-    expect(s.hands[0].bet).toBe(8);
-    expect(s.net).toBe(8);
+    expect(s.hands[0].bet).toBe(2);
+    expect(s.net).toBe(2);
   });
 });
 

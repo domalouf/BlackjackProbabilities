@@ -1,9 +1,7 @@
 import type { ReactNode } from 'react';
 import { GamePhase } from '../game/engine';
 import { PlayerAction } from '../probability';
-import { BET_SIZES } from '../lib/betting';
 import { ev, pctDelta, signedPct } from '../lib/format';
-import Chip from './Chip';
 
 type Evs = Partial<Record<PlayerAction, number>>;
 
@@ -18,15 +16,12 @@ export interface InsuranceOffer {
   best: 'take' | 'decline';
 }
 
-/** Bet chips and the edge they're chosen against, between hands. */
-export interface Betting {
-  bet: number;
-  onBet: (units: number) => void;
+/** What's known about the next hand, shown between hands. */
+export interface NextHand {
   /** Edge for the next hand, `null` while it's being worked out. */
   edge: number | null;
   /** Change from the no-count edge, shown in Counting mode. */
   edgeDelta: number | null;
-  suggested: number | null;
   /** The next hand comes from a freshly shuffled shoe. */
   newShoe: boolean;
 }
@@ -42,7 +37,7 @@ interface Props {
   /** Change in each EV from the no-count baseline, shown in Counting mode. */
   evDeltas: Evs | null;
   insurance: InsuranceOffer | null;
-  betting: Betting;
+  nextHand: NextHand;
   onDeal: () => void;
   onHit: () => void;
   onStand: () => void;
@@ -124,16 +119,15 @@ function ActionButton({
   );
 }
 
-function BetPanel({
-  betting,
+function NextHandPanel({
+  nextHand: { edge, edgeDelta, newShoe },
   action,
   onAction,
 }: {
-  betting: Betting;
+  nextHand: NextHand;
   action: string;
   onAction: () => void;
 }) {
-  const { bet, onBet, edge, edgeDelta, suggested, newShoe } = betting;
   return (
     <div className="flex flex-col items-center gap-2.5">
       <p className="text-center text-xs text-[var(--text-muted)]" aria-live="polite">
@@ -152,47 +146,10 @@ function BetPanel({
             {edgeDelta !== null && Math.abs(edgeDelta) >= 0.00005 && (
               <span className="tabular"> ({pctDelta(edgeDelta, 2)} vs no count)</span>
             )}
-            {suggested !== null && (
-              <>
-                {' · '}bet{' '}
-                <span className="font-semibold text-[var(--text)]">
-                  {suggested} unit{suggested === 1 ? '' : 's'}
-                </span>
-              </>
-            )}
           </>
         )}
       </p>
-      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
-        <div role="radiogroup" aria-label="Bet" className="flex items-center gap-2">
-          {BET_SIZES.map((units) => {
-            const on = units === bet;
-            return (
-              <button
-                key={units}
-                role="radio"
-                aria-checked={on}
-                aria-label={`Bet ${units} unit${units === 1 ? '' : 's'}${units === suggested ? ' (suggested)' : ''}`}
-                onClick={() => onBet(units)}
-                className={`relative rounded-full transition ${FOCUS}`}
-                style={{
-                  transform: on ? 'translateY(-3px)' : undefined,
-                  boxShadow: on ? '0 0 0 2px var(--gold)' : undefined,
-                }}
-              >
-                <Chip units={units} size={38} />
-                {units === suggested && (
-                  <span
-                    className="absolute -bottom-1.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-[var(--gold)]"
-                    aria-hidden
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <PrimaryButton onClick={onAction}>{action}</PrimaryButton>
-      </div>
+      <PrimaryButton onClick={onAction}>{action}</PrimaryButton>
     </div>
   );
 }
@@ -206,7 +163,7 @@ export default function Controls({
   evValues,
   evDeltas,
   insurance,
-  betting,
+  nextHand,
   onDeal,
   onHit,
   onStand,
@@ -218,7 +175,7 @@ export default function Controls({
   onPlayAgain,
 }: Props) {
   if (phase === 'betting') {
-    return <BetPanel betting={betting} action="Deal" onAction={onDeal} />;
+    return <NextHandPanel nextHand={nextHand} action="Deal" onAction={onDeal} />;
   }
 
   if (phase === 'insurance' && insurance) {
@@ -284,5 +241,7 @@ export default function Controls({
     );
   }
 
-  return <BetPanel betting={betting} action="Next hand" onAction={onPlayAgain} />;
+  return (
+    <NextHandPanel nextHand={nextHand} action="Next hand" onAction={onPlayAgain} />
+  );
 }
