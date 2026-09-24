@@ -63,6 +63,8 @@ body {
 /*
  * Felt: a fibre-noise texture blended over a lit-from-above green, with a
  * vignette toward the rail. Pinned to the viewport so the cloth never scrolls.
+ * The texture is a file, not a data: URI, so the site's `default-src 'self'`
+ * CSP allows it (see vite.config.ts).
  */
 body::before {
   content: '';
@@ -71,7 +73,7 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E"),
+    url('./assets/felt-noise.svg'),
     radial-gradient(ellipse 130% 100% at 50% 30%, transparent 45%, rgba(0, 0, 0, 0.5) 100%),
     radial-gradient(ellipse 90% 75% at 50% 30%, var(--felt) 0%, var(--felt-edge) 100%);
   background-blend-mode: soft-light, normal, normal;
@@ -173,4 +175,35 @@ body::before {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* The hole card turning over: a quarter turn in from edge-on. */
+@keyframes cardFlip {
+  from {
+    transform: perspective(600px) rotateY(90deg);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.card-flip {
+  animation: cardFlip 380ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* A casino chip: striped rim, a thin inner ring, the value in the middle. */
+.chip {
+  --c: #c8243a;
+  --s: #ffffff;
+  border-radius: 9999px;
+  background:
+    radial-gradient(
+      circle,
+      var(--c) 0 50%,
+      rgba(255, 255, 255, 0.8) 51% 54%,
+      var(--c) 55% 64%,
+      transparent 65%
+    ),
+    repeating-conic-gradient(var(--s) 0 12deg, var(--c) 12deg 45deg);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
 }

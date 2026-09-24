@@ -26,3 +26,9 @@ export const units = (x: number): string => {
   const abs = Math.abs(x);
   return `${sign}${Number.isInteger(abs) ? abs : abs.toFixed(1)}`;
 };
+
+/** Always-signed percentage: +0.42%, −0.58%. */
+export const signedPct = (p: number, digits = 2): string => {
+  const sign = p > 0 ? '+' : p < 0 ? '−' : '';
+  return `${sign}${Math.abs(p * 100).toFixed(digits)}%`;
+};

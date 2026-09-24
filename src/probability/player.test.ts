@@ -153,3 +153,80 @@ describe('analysePlayerDecision — basic-strategy sanity', () => {
     expect(action.best).toBe('hit');
   });
 });
+
+describe('analysePlayerDecision — splits and surrender', () => {
+  const decide = (
+    pair: number[],
+    up: number,
+    extra: { canSurrender?: boolean } = {},
+  ) => {
+    const shoe = makeShoe(6);
+    for (const b of [...pair, up]) shoe[b] -= 1;
+    return analysePlayerDecision({
+      playerBuckets: pair,
+      dealerUpcards: [up],
+      shoe,
+      dealerRules: RULES,
+      canDouble: true,
+      canSplit: true,
+      ...extra,
+    }).action;
+  };
+
+  it('8-8 vs 10: split, and splitting beats both hitting and standing', () => {
+    // Reference (Wizard of Odds, 6-deck H17 DAS): split ≈ −0.48.
+    const action = decide([8, 8], 10);
+    expect(action.best).toBe('split');
+    expect(action.splitEv).toBeGreaterThan(-0.52);
+    expect(action.splitEv).toBeLessThan(-0.44);
+  });
+
+  it('A-A vs 6: split', () => {
+    expect(decide([1, 1], 6).best).toBe('split');
+  });
+
+  it('10-10 vs 6: stand, never split twenties', () => {
+    expect(decide([10, 10], 6).best).toBe('stand');
+  });
+
+  it('5-5 vs 5: double, never split fives', () => {
+    expect(decide([5, 5], 5).best).toBe('double');
+  });
+
+  it('9-9 vs 7: stand', () => {
+    expect(decide([9, 9], 7).best).toBe('stand');
+  });
+
+  it('splitEv is NaN when the hand is not a pair', () => {
+    const shoe = makeShoe(6);
+    const { action } = analysePlayerDecision({
+      playerBuckets: [10, 6],
+      dealerUpcards: [10],
+      shoe,
+      dealerRules: RULES,
+      canDouble: true,
+      canSplit: true,
+    });
+    expect(action.splitEv).toBeNaN();
+  });
+
+  it('hard 16 vs 10: surrender when it is offered', () => {
+    const shoe = makeShoe(6);
+    shoe[10] -= 2;
+    shoe[6] -= 1;
+    const { action } = analysePlayerDecision({
+      playerBuckets: [10, 6],
+      dealerUpcards: [10],
+      shoe,
+      dealerRules: RULES,
+      canDouble: true,
+      canSurrender: true,
+    });
+    expect(action.surrenderEv).toBe(-0.5);
+    expect(action.best).toBe('surrender');
+  });
+
+  it('hard 16 vs 6: stand, surrender is not worth it', () => {
+    expect(decide([10, 6], 6, { canSurrender: true }).best).toBe('stand');
+  });
+});

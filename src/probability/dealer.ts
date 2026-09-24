@@ -12,15 +12,7 @@
  * computed once per decision point.
  */
 
-import {
-  addCard,
-  Bucket,
-  HandValue,
-  handValue,
-  isSoft,
-  ShoeCounts,
-  shoeSize,
-} from './deckMath';
+import { addCard, Bucket, handValue, ShoeCounts, shoeSize } from './deckMath';
 
 export interface DealerRules {
   /** Dealer draws to a soft 17 (H17, the Vegas 6-deck standard). */
@@ -72,61 +64,136 @@ export function chanceDealerReaches(
   }
 }
 
-function accumulate(
-  hand: HandValue,
-  shoe: ShoeCounts,
-  weight: number,
-  rules: DealerRules,
-  out: DealerDistribution,
-): void {
-  if (hand.total > 21) {
-    out.pBust += weight;
-    return;
+/**
+ * Solves the dealer's draw against one shoe. Outcomes live in a flat buffer, six
+ * slots per state in a fixed order (17, 18, 19, 20, drawn 21, bust); the first
+ * six states are the terminal ones. Everything in the hot loop is a plain
+ * number — this runs hundreds of thousands of times when the player's own
+ * draws and splits are enumerated, so it avoids allocating.
+ */
+class DealerSolver {
+  private readonly shoe: number[];
+  private remaining: number;
+  private readonly hitSoft17: boolean;
+  /** Dealer-drawn multiset → offset of that state's outcomes in `pool`. */
+  private readonly memo = new Map<number, number>();
+  private pool = new Float64Array(6 * 512);
+  private used = 6 * 6;
+
+  constructor(shoe: ShoeCounts, rules: DealerRules) {
+    this.shoe = shoe.slice();
+    this.remaining = shoeSize(shoe);
+    this.hitSoft17 = rules.hitSoft17;
+    // Terminal states: stand on 17..21 at offsets 0..24, bust at 30.
+    for (let i = 0; i < 6; i++) this.pool[i * 7] = 1;
   }
 
-  const standsPat = hand.total >= 18 || hand.total === 17;
-  const hitsThisSoft17 =
-    hand.total === 17 && isSoft(hand) && rules.hitSoft17;
+  /** Offset of the terminal "stands on `total`" state (17–21). */
+  private static standOffset(total: number): number {
+    return (total - 17) * 6;
+  }
 
-  if (standsPat && !hitsThisSoft17) {
-    // Dealer stands. Bucket by final total.
-    switch (hand.total) {
-      case 17:
-        out.p17 += weight;
-        break;
-      case 18:
-        out.p18 += weight;
-        break;
-      case 19:
-        out.p19 += weight;
-        break;
-      case 20:
-        out.p20 += weight;
-        break;
-      default:
-        out.p21 += weight; // 21 reached by drawing
+  private static readonly BUST = 30;
+
+  /**
+   * Offset of the outcome distribution from a dealer hand of `total` with
+   * `softAces` aces still counted as 11, where `drawn` keys the multiset of
+   * cards drawn so far (one base-32 digit per bucket). Within one shoe that
+   * multiset alone fixes both the dealer's total and the cards left, so
+   * drawing 2 then 5 reaches the same state as 5 then 2 and is solved once.
+   */
+  solve(total: number, softAces: number, drawn: number): number {
+    if (total > 21) return DealerSolver.BUST;
+    if (total >= 17 && !(total === 17 && softAces > 0 && this.hitSoft17)) {
+      return DealerSolver.standOffset(total);
     }
-    return;
+    if (this.remaining === 0) {
+      // Shoe exhausted mid-hand — treat the standing total as final. In a
+      // real game the reshuffle happens between hands, so this is defensive.
+      return DealerSolver.standOffset(17);
+    }
+
+    const cached = this.memo.get(drawn);
+    if (cached !== undefined) return cached;
+
+    const shoe = this.shoe;
+    const remaining = this.remaining;
+    let o17 = 0, o18 = 0, o19 = 0, o20 = 0, o21 = 0, oBust = 0;
+    for (let bucket = 1; bucket <= 10; bucket++) {
+      const available = shoe[bucket];
+      if (available === 0) continue;
+      const p = available / remaining;
+
+      let nextTotal = total + (bucket === 1 ? 11 : bucket);
+      let nextSoft = softAces + (bucket === 1 ? 1 : 0);
+      while (nextTotal > 21 && nextSoft > 0) {
+        nextTotal -= 10;
+        nextSoft -= 1;
+      }
+
+      shoe[bucket] -= 1;
+      this.remaining -= 1;
+      const at = this.solve(nextTotal, nextSoft, drawn + DIGIT[bucket]);
+      shoe[bucket] += 1; // restore for the sibling branches
+      this.remaining += 1;
+
+      const pool = this.pool; // re-read: solve() may have grown it
+      o17 += p * pool[at];
+      o18 += p * pool[at + 1];
+      o19 += p * pool[at + 2];
+      o20 += p * pool[at + 3];
+      o21 += p * pool[at + 4];
+      oBust += p * pool[at + 5];
+    }
+
+    const at = this.alloc();
+    const pool = this.pool;
+    pool[at] = o17;
+    pool[at + 1] = o18;
+    pool[at + 2] = o19;
+    pool[at + 3] = o20;
+    pool[at + 4] = o21;
+    pool[at + 5] = oBust;
+    this.memo.set(drawn, at);
+    return at;
   }
 
-  // Dealer must draw. Branch over every card still in the shoe.
-  const remaining = shoeSize(shoe);
-  if (remaining === 0) {
-    // Shoe exhausted mid-hand — treat the standing total as final. In a real
-    // game the reshuffle happens between hands, so this branch is defensive.
-    out.p17 += weight;
-    return;
+  /** Add `weight` × the outcomes at `at` into `out`. */
+  addTo(out: DealerDistribution, at: number, weight: number): void {
+    const pool = this.pool;
+    out.p17 += weight * pool[at];
+    out.p18 += weight * pool[at + 1];
+    out.p19 += weight * pool[at + 2];
+    out.p20 += weight * pool[at + 3];
+    out.p21 += weight * pool[at + 4];
+    out.pBust += weight * pool[at + 5];
   }
 
-  for (let bucket = 1 as Bucket; bucket <= 10; bucket++) {
-    const available = shoe[bucket];
-    if (available === 0) continue;
-    const p = available / remaining;
-    shoe[bucket] -= 1;
-    accumulate(addCard(hand, bucket), shoe, weight * p, rules, out);
-    shoe[bucket] += 1; // restore for the sibling branches
+  /** Take `bucket` out of the shoe (for the first card, dealt by the caller). */
+  remove(bucket: Bucket): void {
+    this.shoe[bucket] -= 1;
+    this.remaining -= 1;
+  }
+
+  restore(bucket: Bucket): void {
+    this.shoe[bucket] += 1;
+    this.remaining += 1;
+  }
+
+  private alloc(): number {
+    if (this.used + 6 > this.pool.length) {
+      const grown = new Float64Array(this.pool.length * 2);
+      grown.set(this.pool);
+      this.pool = grown;
+    }
+    const at = this.used;
+    this.used += 6;
+    return at;
   }
 }
+
+/** Base-32 digit per bucket for {@link DealerSolver.solve}'s multiset key. */
+const DIGIT = Array.from({ length: 11 }, (_, bucket) => 32 ** bucket);
 
 export interface DealerOptions extends DealerRules {
   /**
@@ -152,31 +219,29 @@ export function dealerDistribution(
   options: DealerOptions,
 ): DealerDistribution {
   const out: DealerDistribution = { ...ZERO };
-  const working = shoe.slice();
   const start = handValue(upcards);
+  const solver = new DealerSolver(shoe, options);
 
   if (upcards.length === 1) {
     // Split the first drawn card out so we can label a two-card 21 as a natural.
-    const remaining = shoeSize(working);
+    const remaining = shoeSize(shoe);
     for (let bucket = 1 as Bucket; bucket <= 10; bucket++) {
-      const available = working[bucket];
+      const available = shoe[bucket];
       if (available === 0) continue;
       const p = available / remaining;
       const next = addCard(start, bucket);
-      working[bucket] -= 1;
       if (next.total === 21) {
         out.pBlackjack += p;
-      } else {
-        accumulate(next, working, p, options, out);
+        continue;
       }
-      working[bucket] += 1;
+      solver.remove(bucket);
+      solver.addTo(out, solver.solve(next.total, next.softAces, DIGIT[bucket]), p);
+      solver.restore(bucket);
     }
+  } else if (start.total === 21) {
+    out.pBlackjack = 1;
   } else {
-    if (start.total === 21) {
-      out.pBlackjack = 1;
-    } else {
-      accumulate(start, working, 1, options, out);
-    }
+    solver.addTo(out, solver.solve(start.total, start.softAces, 0), 1);
   }
 
   if (options.peeked ?? true) {

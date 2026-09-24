@@ -4,6 +4,7 @@ import {
   determineWinner,
   GameResult,
   HouseRules,
+  netResult,
   shouldDealerHit,
   VEGAS_6_DECK,
 } from './rules';
@@ -16,7 +17,16 @@ import {
   ShoeCounts,
 } from '../probability/deckMath';
 
-export type GamePhase = 'betting' | 'player' | 'dealer' | 'result';
+/**
+ * - `betting`: before the first deal.
+ * - `insurance`: the dealer shows an Ace and offers insurance (or even money)
+ *   before checking for blackjack.
+ * - `player`: the player is acting on {@link GameSnapshot.activeHand}.
+ * - `dealer`: the hole card is face up and the dealer draws, one card per
+ *   {@link BlackjackGame.dealerStep} so the UI can pace it.
+ * - `result`: every hand is settled.
+ */
+export type GamePhase = 'betting' | 'insurance' | 'player' | 'dealer' | 'result';
 
 /** Hi-Lo card count as a player at the table could keep it. */
 export interface CardCount {
@@ -30,76 +40,157 @@ export interface CardCount {
   seen: number;
 }
 
+/** One of the player's hands — two after a split. */
+export interface PlayerHand {
+  hand: Hand;
+  bet: number;
+  doubled: boolean;
+  /** Formed by splitting a pair: no blackjack, no surrender, no re-split. */
+  fromSplit: boolean;
+  surrendered: boolean;
+  /** Finished acting: stood, doubled, bust, reached 21, or surrendered. */
+  done: boolean;
+  result: GameResult | null;
+}
+
+export interface Insurance {
+  /** Side bet of half the main bet; pays 2:1 if the dealer has blackjack. */
+  bet: number;
+  /** `null` while the offer is open. */
+  taken: boolean | null;
+  /** True when the player holds a natural, so the offer is "even money". */
+  evenMoney: boolean;
+}
+
 export interface GameSnapshot {
   phase: GamePhase;
-  bet: number;
-  /** True once the bet has been doubled this hand. */
-  doubled: boolean;
-  player: Hand;
+  hands: PlayerHand[];
+  /** Index into {@link hands} of the hand being played. */
+  activeHand: number;
   dealer: Hand;
   /** Hide the dealer's hole card in the UI while the player is deciding. */
   dealerHoleHidden: boolean;
-  result: GameResult | null;
+  /** Insurance offered this hand, `null` if the dealer didn't show an Ace. */
+  insurance: Insurance | null;
+  /** Units bet on the hand when it was dealt. */
+  baseBet: number;
+  /** Net units won or lost this hand, insurance included; `null` until settled. */
+  net: number | null;
   rules: HouseRules;
   count: CardCount;
   shoePenetration: number;
   reshuffledLastDeal: boolean;
+  /** The cut card is out: the next hand comes from a freshly shuffled shoe. */
+  reshuffleNext: boolean;
+  /** Bumped on every change — a cheap key for memoising derived state. */
+  version: number;
 }
 
-/** Every hand is played for a fixed 1-unit bet; doubling down raises it to 2. */
+/** A hand is played for 1 unit unless the player bets more. */
 const BASE_BET = 1;
+
+const newHand = (bet: number, fromSplit = false): PlayerHand => ({
+  hand: new Hand(),
+  bet,
+  doubled: false,
+  fromSplit,
+  surrendered: false,
+  done: false,
+  result: null,
+});
 
 export class BlackjackGame {
   private phase: GamePhase = 'betting';
-  private bet = BASE_BET;
-  private doubled = false;
-  private player = new Hand();
+  private baseBet = BASE_BET;
+  private hands: PlayerHand[] = [newHand(BASE_BET)];
+  private active = 0;
   private dealer = new Hand();
-  private result: GameResult | null = null;
+  private insurance: Insurance | null = null;
   private shoe: Shoe;
   private reshuffledLastDeal = false;
+  private version = 0;
 
-  constructor(private readonly rules: HouseRules = VEGAS_6_DECK) {
-    this.shoe = new Shoe(rules.decks);
+  constructor(
+    private readonly rules: HouseRules = VEGAS_6_DECK,
+    shoe?: Shoe,
+  ) {
+    this.shoe = shoe ?? new Shoe(rules.decks);
   }
 
   snapshot(): GameSnapshot {
     return {
       phase: this.phase,
-      bet: this.bet,
-      doubled: this.doubled,
-      player: this.player,
+      hands: this.hands.map((h) => ({ ...h })),
+      activeHand: this.active,
       dealer: this.dealer,
       dealerHoleHidden: this.dealerHoleHidden(),
-      result: this.result,
+      insurance: this.insurance && { ...this.insurance },
+      baseBet: this.baseBet,
+      net: this.phase === 'result' ? this.net() : null,
       rules: this.rules,
       count: this.cardCount(),
       shoePenetration: this.shoe.penetration(),
       reshuffledLastDeal: this.reshuffledLastDeal,
+      reshuffleNext: this.shoe.needsReshuffle(),
+      version: this.version,
     };
   }
 
   // --- Betting -------------------------------------------------------------
 
-  deal(): void {
+  deal(bet: number = BASE_BET): void {
     if (this.phase !== 'betting') throw new Error('Not in betting phase');
+    this.version++;
 
     this.reshuffledLastDeal = this.shoe.needsReshuffle();
     if (this.reshuffledLastDeal) this.shoe.reset();
 
-    this.bet = BASE_BET;
-    this.doubled = false;
-    this.player.clear();
+    this.baseBet = bet;
+    this.hands = [newHand(bet)];
+    this.active = 0;
     this.dealer.clear();
-    this.result = null;
+    this.insurance = null;
 
-    this.player.add(this.shoe.deal());
-    this.dealer.add(this.shoe.deal());
-    this.player.add(this.shoe.deal());
-    this.dealer.add(this.shoe.deal());
+    const player = this.hands[0].hand;
+    player.add(this.shoe.deal());
+    this.dealer.add(this.shoe.deal()); // hole card
+    player.add(this.shoe.deal());
+    this.dealer.add(this.shoe.deal()); // upcard
 
-    // US peek rule: settle immediately on a dealer natural.
-    if (this.dealer.isBlackjack() || this.player.isBlackjack()) {
+    // An Ace up: offer insurance before the dealer checks for blackjack.
+    if (this.dealer.getCards()[1].rank === 'A') {
+      this.insurance = {
+        bet: bet / 2,
+        taken: null,
+        evenMoney: player.isBlackjack(),
+      };
+      this.phase = 'insurance';
+      return;
+    }
+    this.peek();
+  }
+
+  /** Take insurance (or even money) — only while the dealer shows an Ace. */
+  takeInsurance(): void {
+    this.answerInsurance(true);
+  }
+
+  declineInsurance(): void {
+    this.answerInsurance(false);
+  }
+
+  private answerInsurance(take: boolean): void {
+    if (this.phase !== 'insurance' || !this.insurance) {
+      throw new Error('Insurance is not on offer');
+    }
+    this.version++;
+    this.insurance.taken = take;
+    this.peek();
+  }
+
+  /** US peek rule: the dealer checks for a natural and settles it at once. */
+  private peek(): void {
+    if (this.dealer.isBlackjack() || this.hands[0].hand.isBlackjack()) {
       this.finish();
       return;
     }
@@ -108,56 +199,174 @@ export class BlackjackGame {
 
   // --- Player actions ----------------------------------------------------
 
+  private get current(): PlayerHand {
+    return this.hands[this.active];
+  }
+
   get canDouble(): boolean {
-    return this.phase === 'player' && this.player.getSize() === 2;
+    const h = this.current;
+    return (
+      this.phase === 'player' &&
+      h.hand.getSize() === 2 &&
+      (!h.fromSplit || this.rules.doubleAfterSplit)
+    );
+  }
+
+  /** An opening pair of the same value; pairs split once (two hands). */
+  get canSplit(): boolean {
+    if (this.phase !== 'player' || this.hands.length > 1) return false;
+    const cards = this.current.hand.getCards();
+    return (
+      cards.length === 2 &&
+      rankToBucket(cards[0].rank) === rankToBucket(cards[1].rank)
+    );
+  }
+
+  get canSurrender(): boolean {
+    return (
+      this.rules.lateSurrender &&
+      this.phase === 'player' &&
+      this.hands.length === 1 &&
+      this.current.hand.getSize() === 2
+    );
   }
 
   hit(): void {
     this.requirePlayerTurn();
-    this.player.add(this.shoe.deal());
-    if (this.player.isBust()) this.finish();
+    this.version++;
+    const { hand } = this.current;
+    hand.add(this.shoe.deal());
+    if (hand.isBust() || hand.getValue() === 21) this.completeHand();
   }
 
   stand(): void {
     this.requirePlayerTurn();
-    this.playDealer();
+    this.version++;
+    this.completeHand();
   }
 
   doubleDown(): void {
     if (!this.canDouble) throw new Error('Cannot double down now');
-    this.bet *= 2;
-    this.doubled = true;
-    this.player.add(this.shoe.deal());
-    if (this.player.isBust()) {
-      this.finish();
-      return;
-    }
-    this.playDealer();
+    this.version++;
+    const h = this.current;
+    h.bet *= 2;
+    h.doubled = true;
+    h.hand.add(this.shoe.deal());
+    this.completeHand();
+  }
+
+  split(): void {
+    if (!this.canSplit) throw new Error('Cannot split now');
+    this.version++;
+    const { bet } = this.current;
+    const [first, second] = this.current.hand.getCards();
+    const a = newHand(bet, true);
+    const b = newHand(bet, true);
+    a.hand.add(first);
+    b.hand.add(second);
+    this.hands = [a, b];
+    this.enterHand(0);
+    this.advance();
+  }
+
+  surrender(): void {
+    if (!this.canSurrender) throw new Error('Cannot surrender now');
+    this.version++;
+    this.current.surrendered = true;
+    this.completeHand();
   }
 
   playAgain(): void {
     if (this.phase !== 'result') throw new Error('Hand not finished');
+    this.version++;
     this.phase = 'betting';
-    this.bet = BASE_BET;
-    this.doubled = false;
-    this.result = null;
   }
 
   private requirePlayerTurn(): void {
     if (this.phase !== 'player') throw new Error('Not the player turn');
   }
 
-  private playDealer(): void {
-    this.phase = 'dealer';
-    while (shouldDealerHit(this.dealer, this.rules)) {
-      this.dealer.add(this.shoe.deal());
+  private completeHand(): void {
+    this.current.done = true;
+    this.advance();
+  }
+
+  /**
+   * Make hand `index` the active one. A split hand gets its second card only
+   * now, as at a real table; split aces get that one card and no more.
+   */
+  private enterHand(index: number): void {
+    this.active = index;
+    const h = this.current;
+    if (h.hand.getSize() === 1) h.hand.add(this.shoe.deal());
+    const splitAces = h.fromSplit && h.hand.getCards()[0].rank === 'A';
+    if (splitAces || h.hand.getValue() === 21) h.done = true;
+  }
+
+  /** Move past finished hands; once all are done, hand over to the dealer. */
+  private advance(): void {
+    while (this.current.done) {
+      if (this.active + 1 >= this.hands.length) {
+        this.revealDealer();
+        return;
+      }
+      this.enterHand(this.active + 1);
     }
-    this.finish();
+  }
+
+  // --- Dealer ------------------------------------------------------------
+
+  /** Turn the hole card; the dealer only draws if a hand is still live. */
+  private revealDealer(): void {
+    const live = this.hands.some((h) => !h.surrendered && !h.hand.isBust());
+    if (live) {
+      this.phase = 'dealer';
+    } else {
+      this.finish();
+    }
+  }
+
+  /**
+   * One beat of the dealer's turn: draw a card if the rules say hit,
+   * otherwise settle the hand. Call repeatedly while the phase is `dealer`.
+   */
+  dealerStep(): void {
+    if (this.phase !== 'dealer') throw new Error("Not the dealer's turn");
+    this.version++;
+    if (shouldDealerHit(this.dealer, this.rules)) {
+      this.dealer.add(this.shoe.deal());
+    } else {
+      this.finish();
+    }
+  }
+
+  /** Run the dealer's whole turn at once (tests, or skipping the animation). */
+  playDealerOut(): void {
+    while (this.phase === 'dealer') this.dealerStep();
   }
 
   private finish(): void {
-    this.result = determineWinner(this.player, this.dealer);
+    for (const h of this.hands) {
+      h.done = true;
+      h.result = h.surrendered
+        ? 'surrender'
+        : determineWinner(h.hand, this.dealer, { fromSplit: h.fromSplit });
+    }
     this.phase = 'result';
+  }
+
+  /** Net units for the settled hand: every player hand plus insurance. */
+  private net(): number {
+    let net = 0;
+    for (const h of this.hands) {
+      if (h.result) net += netResult(h.result, h.bet, this.rules);
+    }
+    if (this.insurance?.taken) {
+      net += this.dealer.isBlackjack()
+        ? 2 * this.insurance.bet
+        : -this.insurance.bet;
+    }
+    return net;
   }
 
   // --- Card counting ------------------------------------------------------
@@ -186,7 +395,15 @@ export class BlackjackGame {
   }
 
   private dealerHoleHidden(): boolean {
-    return this.phase === 'player' || this.phase === 'betting';
+    return (
+      this.phase === 'betting' ||
+      this.phase === 'insurance' ||
+      this.phase === 'player'
+    );
+  }
+
+  private playerCards(): Card[] {
+    return this.hands.flatMap((h) => h.hand.getCards());
   }
 
   // --- Probability-engine input ---------------------------------------------
@@ -219,7 +436,7 @@ export class BlackjackGame {
     const remove = (cards: Card[]) => {
       for (const c of cards) counts[rankToBucket(c.rank)] -= 1;
     };
-    remove(this.player.getCards());
+    remove(this.playerCards());
     // Only the dealer's upcard (index 0 is the hole card, dealt first).
     const dealerCards = this.dealer.getCards();
     if (this.dealerHoleHidden()) {
@@ -228,6 +445,17 @@ export class BlackjackGame {
       remove(dealerCards);
     }
     return counts;
+  }
+
+  /**
+   * The shoe the *next* hand will be dealt from, as a counter knows it: a
+   * fresh shoe if the cut card has come out, otherwise every undealt card.
+   * Only meaningful between hands, when nothing is face down.
+   */
+  nextRoundShoeCounts(): ShoeCounts {
+    return this.shoe.needsReshuffle()
+      ? makeShoe(this.rules.decks)
+      : this.shoe.remainingCounts();
   }
 
   dealerUpcardBucket(): Bucket | null {

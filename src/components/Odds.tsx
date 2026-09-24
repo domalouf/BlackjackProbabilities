@@ -1,6 +1,10 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { DecisionAnalysis, DualDecisionAnalysis } from '../hooks/useBlackjack';
-import { chanceDealerReaches, DealerDistribution } from '../probability';
+import {
+  chanceDealerReaches,
+  DealerDistribution,
+  InsuranceDecision,
+} from '../probability';
 import { ev, pct, pctDelta } from '../lib/format';
 
 /** Which shoe assumption the odds use — see {@link DualDecisionAnalysis}. */
@@ -13,6 +17,10 @@ interface OddsProps {
   baseline: DecisionAnalysis | null;
   /** The odds are from the last decision of a hand that has since ended. */
   stale: boolean;
+  /** The insurance offer, while it's open — replaces the regular odds. */
+  insurance?: InsuranceDecision | null;
+  /** No-count insurance figures to diff against, in Counting mode. */
+  insuranceBaseline?: InsuranceDecision | null;
   style?: CSSProperties;
 }
 
@@ -125,33 +133,22 @@ function StackedBar({
   );
 }
 
-function DealerBars({
-  dist,
-  baseline,
-}: {
-  dist: DealerDistribution | null;
-  baseline?: DealerDistribution;
-}) {
-  const rows: { label: string; value: number | null; base?: number; bust?: boolean }[] = [
-    { label: '17', value: dist && dist.p17, base: baseline?.p17 },
-    { label: '18', value: dist && dist.p18, base: baseline?.p18 },
-    { label: '19', value: dist && dist.p19, base: baseline?.p19 },
-    { label: '20', value: dist && dist.p20, base: baseline?.p20 },
-    {
-      label: '21',
-      value: dist && chanceDealerReaches(dist, 21),
-      base: baseline && chanceDealerReaches(baseline, 21),
-    },
-    { label: 'Bust', value: dist && dist.pBust, base: baseline?.pBust, bust: true },
-  ];
-  const max = Math.max(...rows.map((r) => r.value ?? 0), 0.01);
+interface BarRow {
+  label: string;
+  value: number | null;
+  base?: number;
+  highlight?: string;
+}
+
+function BarRows({ rows, scale }: { rows: BarRow[]; scale?: number }) {
+  const max = scale ?? Math.max(...rows.map((r) => r.value ?? 0), 0.01);
   return (
     <div className="space-y-1 sm:space-y-1.5">
       {rows.map((r) => (
         <div key={r.label} className="flex items-center gap-2">
           <span
-            className="tabular w-8 text-right text-xs"
-            style={{ color: r.bust ? 'var(--win)' : 'var(--text-muted)' }}
+            className="tabular w-8 shrink-0 text-right text-xs"
+            style={{ color: r.highlight ?? 'var(--text-muted)' }}
           >
             {r.label}
           </span>
@@ -160,7 +157,7 @@ function DealerBars({
               className="h-full rounded-full transition-[width] duration-300"
               style={{
                 width: `${((r.value ?? 0) / max) * 100}%`,
-                background: r.bust ? 'var(--win)' : 'var(--neutral)',
+                background: r.highlight ?? 'var(--neutral)',
               }}
             />
           </div>
@@ -176,6 +173,36 @@ function DealerBars({
   );
 }
 
+function DealerBars({
+  dist,
+  baseline,
+}: {
+  dist: DealerDistribution | null;
+  baseline?: DealerDistribution;
+}) {
+  return (
+    <BarRows
+      rows={[
+        { label: '17', value: dist && dist.p17, base: baseline?.p17 },
+        { label: '18', value: dist && dist.p18, base: baseline?.p18 },
+        { label: '19', value: dist && dist.p19, base: baseline?.p19 },
+        { label: '20', value: dist && dist.p20, base: baseline?.p20 },
+        {
+          label: '21',
+          value: dist && chanceDealerReaches(dist, 21),
+          base: baseline && chanceDealerReaches(baseline, 21),
+        },
+        {
+          label: 'Bust',
+          value: dist && dist.pBust,
+          base: baseline?.pBust,
+          highlight: 'var(--win)',
+        },
+      ]}
+    />
+  );
+}
+
 function caption(stale: boolean, baseline: DecisionAnalysis | null) {
   if (stale) return 'at your last decision';
   if (baseline) return '(Δ vs no count)';
@@ -188,7 +215,42 @@ const dimmed = (stale: boolean, active: DecisionAnalysis | null): CSSProperties 
 });
 
 /** Where the dealer's hand will finish — shown beside the dealer's cards. */
-export function DealerOdds({ active, baseline, stale, style }: OddsProps) {
+export function DealerOdds({
+  active,
+  baseline,
+  stale,
+  insurance,
+  insuranceBaseline,
+  style,
+}: OddsProps) {
+  if (insurance) {
+    const p = insurance.pDealerBlackjack;
+    const base = insuranceBaseline?.pDealerBlackjack;
+    return (
+      <section className="mx-auto w-full max-w-md lg:max-w-none" style={style}>
+        <Heading
+          title="Dealer's hole card"
+          aside={insuranceBaseline ? '(Δ vs no count)' : null}
+        />
+        <BarRows
+          scale={1}
+          rows={[
+            { label: 'Ten', value: p, base, highlight: 'var(--loss)' },
+            {
+              label: 'Other',
+              value: 1 - p,
+              base: base === undefined ? undefined : 1 - base,
+            },
+          ]}
+        />
+        <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-muted)]">
+          A ten under the Ace is blackjack. The dealer checks once you've
+          decided on insurance.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section
       className="mx-auto w-full max-w-md lg:max-w-none"
@@ -200,23 +262,90 @@ export function DealerOdds({ active, baseline, stale, style }: OddsProps) {
   );
 }
 
+/** Insurance explained, while the offer is open. */
+function InsuranceOdds({
+  insurance,
+  baseline,
+}: {
+  insurance: InsuranceDecision;
+  baseline?: InsuranceDecision | null;
+}) {
+  const p = insurance.pDealerBlackjack;
+  return (
+    <div>
+      <Heading title={insurance.evenMoney ? 'Even money' : 'Insurance'} />
+      <StackedBar
+        segments={[
+          {
+            label: 'Dealer blackjack',
+            value: p,
+            baseline: baseline?.pDealerBlackjack,
+            color: 'var(--loss)',
+          },
+          {
+            label: 'No blackjack',
+            value: 1 - p,
+            baseline: baseline ? 1 - baseline.pDealerBlackjack : undefined,
+            color: 'var(--neutral)',
+          },
+        ]}
+      />
+      <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-muted)]">
+        {insurance.evenMoney ? (
+          <>
+            Even money locks in +1 whatever the hole card is. Playing on pays
+            +1.5 unless the dealer also has blackjack, which pushes — worth{' '}
+            {ev(insurance.declineEv)} on average.
+          </>
+        ) : (
+          <>
+            Insurance wins +1 (2:1 on its ½ unit) when the dealer has
+            blackjack and loses ½ otherwise, so it only pays when more than a
+            third of the unseen cards are tens — here it's worth{' '}
+            {ev(insurance.takeEv)}.
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
 /** What standing or taking a card does to your hand — beside your cards. */
 export function PlayerOdds({
   active,
   baseline,
   stale,
+  insurance,
+  insuranceBaseline,
   mode,
+  handLabel,
   style,
-}: OddsProps & { mode: OddsMode }) {
+}: OddsProps & {
+  mode: OddsMode;
+  /** Which hand the odds are for, once a pair has been split. */
+  handLabel?: string;
+}) {
+  if (insurance) {
+    return (
+      <section className="mx-auto w-full max-w-md lg:max-w-none" style={style}>
+        <InsuranceOdds insurance={insurance} baseline={insuranceBaseline} />
+      </section>
+    );
+  }
+
   const stand = active?.action.stand;
   const hit = active?.action.hit;
+  const prefix = handLabel ? `${handLabel} · ` : '';
   return (
     <section
       className="mx-auto flex w-full max-w-md flex-col gap-3 sm:gap-4 lg:max-w-none"
       style={{ ...style, ...dimmed(stale, active) }}
     >
       <div>
-        <Heading title="If you stand now" aside={caption(stale, baseline)} />
+        <Heading
+          title={`${prefix}If you stand now`}
+          aside={caption(stale, baseline)}
+        />
         <StackedBar
           segments={[
             {
@@ -242,7 +371,7 @@ export function PlayerOdds({
       </div>
 
       <div>
-        <Heading title="If you hit once, then stand" />
+        <Heading title={`${prefix}If you hit once, then stand`} />
         <StackedBar
           segments={[
             {
@@ -279,6 +408,7 @@ export function PlayerOdds({
             The EV on each button is in bet units: an EV of{' '}
             {ev(active.action.stand.ev)} means that action returns, on average,{' '}
             {ev(active.action.stand.ev)} times your stake.{' '}
+            {active.canSplit && 'Split counts both hands, in units of your first bet. '}
             {mode === 'noCount'
               ? 'Assumes a fresh shoe each hand — the basic-strategy baseline.'
               : "Uses the shoe's real composition; figures in parentheses are the change from not counting."}

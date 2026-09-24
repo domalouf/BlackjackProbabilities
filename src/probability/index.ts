@@ -9,3 +9,5 @@
 export * from './deckMath';
 export * from './dealer';
 export * from './player';
+export * from './insurance';
+export * from './edge';

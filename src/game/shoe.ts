@@ -52,6 +52,25 @@ export class Shoe {
     }
   }
 
+  /**
+   * Arrange the next cards to come out of the shoe, in deal order, by moving
+   * matching cards to the top. The shoe stays a real shoe — same cards, only
+   * reordered — so counts and odds stay consistent. Used to script hands in
+   * tests.
+   */
+  stack(ranks: Rank[]): void {
+    for (let i = ranks.length - 1; i >= 0; i--) {
+      // Search only below the cards already stacked on top.
+      const unstacked = this.cards.length - (ranks.length - 1 - i);
+      const at = this.cards.findIndex(
+        (c, index) => index < unstacked && c.rank === ranks[i],
+      );
+      if (at < 0) throw new Error(`No ${ranks[i]} left to stack`);
+      const [card] = this.cards.splice(at, 1);
+      this.cards.push(card); // deal() pops from the end
+    }
+  }
+
   /** True if the cut card has been reached — reshuffle before the next hand. */
   needsReshuffle(): boolean {
     return this.cards.length <= this.reshuffleAt;

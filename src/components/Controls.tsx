@@ -1,21 +1,56 @@
 import type { ReactNode } from 'react';
-import { GameSnapshot } from '../game/engine';
-import { ev } from '../lib/format';
+import { GamePhase } from '../game/engine';
+import { PlayerAction } from '../probability';
+import { BET_SIZES } from '../lib/betting';
+import { ev, pctDelta, signedPct } from '../lib/format';
+import Chip from './Chip';
 
-type Action = 'hit' | 'stand' | 'double';
+type Evs = Partial<Record<PlayerAction, number>>;
+
+/** The insurance / even-money offer, as the buttons show it. */
+export interface InsuranceOffer {
+  evenMoney: boolean;
+  takeEv: number;
+  declineEv: number;
+  /** Change from the no-count figures, shown in Counting mode. */
+  takeDelta?: number;
+  declineDelta?: number;
+  best: 'take' | 'decline';
+}
+
+/** Bet chips and the edge they're chosen against, between hands. */
+export interface Betting {
+  bet: number;
+  onBet: (units: number) => void;
+  /** Edge for the next hand, `null` while it's being worked out. */
+  edge: number | null;
+  /** Change from the no-count edge, shown in Counting mode. */
+  edgeDelta: number | null;
+  suggested: number | null;
+  /** The next hand comes from a freshly shuffled shoe. */
+  newShoe: boolean;
+}
 
 interface Props {
-  snapshot: GameSnapshot;
+  phase: GamePhase;
   canDouble: boolean;
-  recommended: Action | null;
+  canSplit: boolean;
+  canSurrender: boolean;
+  recommended: PlayerAction | null;
   /** EV in bet units for each action, `null` outside the player's turn. */
-  evValues: Record<Action, number> | null;
+  evValues: Evs | null;
   /** Change in each EV from the no-count baseline, shown in Counting mode. */
-  evDeltas: Record<Action, number> | null;
+  evDeltas: Evs | null;
+  insurance: InsuranceOffer | null;
+  betting: Betting;
   onDeal: () => void;
   onHit: () => void;
   onStand: () => void;
   onDouble: () => void;
+  onSplit: () => void;
+  onSurrender: () => void;
+  onTakeInsurance: () => void;
+  onDeclineInsurance: () => void;
   onPlayAgain: () => void;
 }
 
@@ -57,7 +92,7 @@ function ActionButton({
   const showEv = evValue !== undefined && Number.isFinite(evValue);
   return (
     <button
-      className={`relative flex min-w-[5.5rem] flex-col items-center rounded-xl bg-[var(--chip)] px-4 py-2 shadow-[0_2px_8px_rgba(0,0,0,0.25)] transition enabled:hover:bg-[var(--chip-hover)] enabled:active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[6.5rem] ${FOCUS}`}
+      className={`relative flex min-w-[4.75rem] flex-col items-center rounded-xl bg-[var(--chip)] px-3 py-2 transition enabled:hover:bg-[var(--chip-hover)] enabled:active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40 sm:min-w-[5.25rem] ${FOCUS}`}
       style={{
         boxShadow: best
           ? '0 0 0 2px var(--gold), 0 2px 8px rgba(0,0,0,0.25)'
@@ -75,7 +110,7 @@ function ActionButton({
           EV {ev(evValue)}
         </span>
       )}
-      {showEv && evDelta !== undefined && (
+      {showEv && evDelta !== undefined && Number.isFinite(evDelta) && (
         <span className="tabular text-[10px] font-medium text-[var(--text-muted)]">
           ({ev(evDelta)})
         </span>
@@ -89,69 +124,165 @@ function ActionButton({
   );
 }
 
+function BetPanel({
+  betting,
+  action,
+  onAction,
+}: {
+  betting: Betting;
+  action: string;
+  onAction: () => void;
+}) {
+  const { bet, onBet, edge, edgeDelta, suggested, newShoe } = betting;
+  return (
+    <div className="flex flex-col items-center gap-2.5">
+      <p className="text-center text-xs text-[var(--text-muted)]" aria-live="polite">
+        {edge === null ? (
+          'Working out your edge on the next hand…'
+        ) : (
+          <>
+            {newShoe && 'New shoe · '}
+            Your edge next hand{' '}
+            <span
+              className="tabular font-bold"
+              style={{ color: edge > 0 ? 'var(--win)' : 'var(--loss)' }}
+            >
+              {signedPct(edge)}
+            </span>
+            {edgeDelta !== null && Math.abs(edgeDelta) >= 0.00005 && (
+              <span className="tabular"> ({pctDelta(edgeDelta, 2)} vs no count)</span>
+            )}
+            {suggested !== null && (
+              <>
+                {' · '}bet{' '}
+                <span className="font-semibold text-[var(--text)]">
+                  {suggested} unit{suggested === 1 ? '' : 's'}
+                </span>
+              </>
+            )}
+          </>
+        )}
+      </p>
+      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
+        <div role="radiogroup" aria-label="Bet" className="flex items-center gap-2">
+          {BET_SIZES.map((units) => {
+            const on = units === bet;
+            return (
+              <button
+                key={units}
+                role="radio"
+                aria-checked={on}
+                aria-label={`Bet ${units} unit${units === 1 ? '' : 's'}${units === suggested ? ' (suggested)' : ''}`}
+                onClick={() => onBet(units)}
+                className={`relative rounded-full transition ${FOCUS}`}
+                style={{
+                  transform: on ? 'translateY(-3px)' : undefined,
+                  boxShadow: on ? '0 0 0 2px var(--gold)' : undefined,
+                }}
+              >
+                <Chip units={units} size={38} />
+                {units === suggested && (
+                  <span
+                    className="absolute -bottom-1.5 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-[var(--gold)]"
+                    aria-hidden
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <PrimaryButton onClick={onAction}>{action}</PrimaryButton>
+      </div>
+    </div>
+  );
+}
+
 export default function Controls({
-  snapshot,
+  phase,
   canDouble,
+  canSplit,
+  canSurrender,
   recommended,
   evValues,
   evDeltas,
+  insurance,
+  betting,
   onDeal,
   onHit,
   onStand,
   onDouble,
+  onSplit,
+  onSurrender,
+  onTakeInsurance,
+  onDeclineInsurance,
   onPlayAgain,
 }: Props) {
-  if (snapshot.phase === 'betting') {
+  if (phase === 'betting') {
+    return <BetPanel betting={betting} action="Deal" onAction={onDeal} />;
+  }
+
+  if (phase === 'insurance' && insurance) {
     return (
-      <div className="flex flex-col items-center gap-2">
-        <PrimaryButton onClick={onDeal}>Deal</PrimaryButton>
+      <div className="flex flex-col items-center gap-2.5">
         <p className="text-center text-xs text-[var(--text-muted)]">
-          Every hand bets 1 unit — double down to raise it to 2.
+          {insurance.evenMoney
+            ? 'Dealer shows an Ace. Take even money (1:1 now), or play on for 3:2?'
+            : 'Dealer shows an Ace. Insurance costs ½ unit and pays 2:1 if the dealer has blackjack.'}
         </p>
+        <div className="flex flex-wrap justify-center gap-3">
+          <ActionButton
+            label={insurance.evenMoney ? 'Even money' : 'Insurance'}
+            onClick={onTakeInsurance}
+            best={insurance.best === 'take'}
+            evValue={insurance.takeEv}
+            evDelta={insurance.takeDelta}
+          />
+          <ActionButton
+            label={insurance.evenMoney ? 'Play on' : 'No insurance'}
+            onClick={onDeclineInsurance}
+            best={insurance.best === 'decline'}
+            evValue={insurance.declineEv}
+            evDelta={insurance.declineDelta}
+          />
+        </div>
       </div>
     );
   }
 
-  if (snapshot.phase === 'player') {
+  if (phase === 'player') {
+    const button = (
+      action: PlayerAction,
+      label: string,
+      onClick: () => void,
+      allowed = true,
+    ) => (
+      <ActionButton
+        label={label}
+        onClick={onClick}
+        disabled={!allowed}
+        best={recommended === action && allowed}
+        evValue={allowed ? evValues?.[action] : undefined}
+        evDelta={evDeltas?.[action]}
+      />
+    );
     return (
-      <div className="flex flex-wrap justify-center gap-3">
-        <ActionButton
-          label="Hit"
-          onClick={onHit}
-          best={recommended === 'hit'}
-          evValue={evValues?.hit}
-          evDelta={evDeltas?.hit}
-        />
-        <ActionButton
-          label="Stand"
-          onClick={onStand}
-          best={recommended === 'stand'}
-          evValue={evValues?.stand}
-          evDelta={evDeltas?.stand}
-        />
-        <ActionButton
-          label="Double"
-          onClick={onDouble}
-          disabled={!canDouble}
-          best={recommended === 'double' && canDouble}
-          evValue={canDouble ? evValues?.double : undefined}
-          evDelta={evDeltas?.double}
-        />
+      <div className="flex flex-wrap justify-center gap-2.5">
+        {button('hit', 'Hit', onHit)}
+        {button('stand', 'Stand', onStand)}
+        {button('double', 'Double', onDouble, canDouble)}
+        {canSplit && button('split', 'Split', onSplit)}
+        {canSurrender && button('surrender', 'Surrender', onSurrender)}
       </div>
     );
   }
 
-  if (snapshot.phase === 'dealer') {
+  if (phase === 'dealer') {
     return (
-      <p className="text-center text-sm text-[var(--text-muted)]">
+      <p className="py-3 text-center text-sm text-[var(--text-muted)]">
         Dealer drawing…
       </p>
     );
   }
 
-  return (
-    <div className="flex justify-center">
-      <PrimaryButton onClick={onPlayAgain}>Next hand</PrimaryButton>
-    </div>
-  );
+  return <BetPanel betting={betting} action="Next hand" onAction={onPlayAgain} />;
 }

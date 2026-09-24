@@ -48,7 +48,7 @@ describe('BlackjackGame card count', () => {
     // player's two cards + dealer upcard only
     expect(s.count.seen).toBe(3);
     const visible = [
-      ...s.player.getCards(),
+      ...s.hands[0].hand.getCards(),
       s.dealer.getCards()[1], // index 0 is the hole card
     ];
     const expected = visible.reduce(
@@ -61,9 +61,10 @@ describe('BlackjackGame card count', () => {
   it('adds the hole card back once the hand is resolved', () => {
     const game = freshHand();
     game.stand();
+    game.playDealerOut();
     const s = game.snapshot();
 
-    const all = [...s.player.getCards(), ...s.dealer.getCards()];
+    const all = [...s.hands[0].hand.getCards(), ...s.dealer.getCards()];
     const expected = all.reduce(
       (n, c) => n + hiLoValue(rankToBucket(c.rank)),
       0,
@@ -87,7 +88,9 @@ describe('BlackjackGame shoe views (counting vs no count)', () => {
   };
 
   const finishHand = (game: BlackjackGame): void => {
+    if (game.snapshot().phase === 'insurance') game.declineInsurance();
     if (game.snapshot().phase === 'player') game.stand();
+    game.playDealerOut();
     if (game.snapshot().phase === 'result') game.playAgain();
   };
 
@@ -115,7 +118,7 @@ describe('BlackjackGame shoe views (counting vs no count)', () => {
     for (let attempt = 0; attempt < 50; attempt++) {
       game.deal();
       if (game.snapshot().phase === 'player') break;
-      game.playAgain();
+      finishHand(game);
     }
     expect(game.snapshot().phase).toBe('player');
 
