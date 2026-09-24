@@ -24,7 +24,7 @@ export default function TableMarkings({ rules, announcement, style }: Props) {
         className="serif w-full max-w-xl transition-opacity duration-200"
         style={{ opacity: announcement ? 0.2 : 1 }}
         role="img"
-        aria-label={`Blackjack pays ${payout.toLowerCase()}. ${dealerRule.toLowerCase()}. ${rules.decks} decks.`}
+        aria-label={`Blackjack pays ${payout.toLowerCase()}. ${dealerRule.toLowerCase()}. Insurance pays 2 to 1. ${rules.decks} decks.`}
       >
         <defs>
           <path id="markings-top" d="M 20 6 Q 300 126 580 6" />
@@ -54,7 +54,7 @@ export default function TableMarkings({ rules, announcement, style }: Props) {
           letterSpacing="2.5"
         >
           <textPath href="#markings-bottom" startOffset="50%" textAnchor="middle">
-            {dealerRule} · {rules.decks} DECKS
+            {dealerRule} · INSURANCE PAYS 2 TO 1
           </textPath>
         </text>
       </svg>

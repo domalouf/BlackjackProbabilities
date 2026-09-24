@@ -2,18 +2,28 @@ import { Hand } from './hand';
 
 /**
  * House rules. The defaults are the Las Vegas 6-deck standard:
- * 6 decks, dealer hits soft 17, blackjack pays 3:2, double on any two cards.
+ * 6 decks, dealer hits soft 17, blackjack pays 3:2, double on any two cards,
+ * double after split, late surrender, insurance offered against an Ace.
+ *
+ * Pairs may be split once (two hands, no re-splitting); split aces get one
+ * card each, and a two-card 21 after a split pays 1:1, not 3:2.
  */
 export interface HouseRules {
   decks: number;
   hitSoft17: boolean;
   blackjackPayout: number; // profit multiple on the stake (1.5 = 3:2)
+  /** Double down allowed on a two-card hand formed by splitting. */
+  doubleAfterSplit: boolean;
+  /** Forfeit half the bet on the opening two cards, after the dealer peeks. */
+  lateSurrender: boolean;
 }
 
 export const VEGAS_6_DECK: HouseRules = {
   decks: 6,
   hitSoft17: true,
   blackjackPayout: 1.5,
+  doubleAfterSplit: true,
+  lateSurrender: true,
 };
 
 export function shouldDealerHit(dealer: Hand, rules: HouseRules): boolean {
@@ -28,10 +38,19 @@ export type GameResult =
   | 'player-loss'
   | 'push'
   | 'player-blackjack'
-  | 'dealer-blackjack';
+  | 'dealer-blackjack'
+  | 'surrender';
 
-export function determineWinner(player: Hand, dealer: Hand): GameResult {
-  const playerBJ = player.isBlackjack();
+/**
+ * Settle one player hand against the dealer's final hand. A hand formed by
+ * splitting can't be a blackjack: a two-card 21 there is an ordinary 21.
+ */
+export function determineWinner(
+  player: Hand,
+  dealer: Hand,
+  { fromSplit = false }: { fromSplit?: boolean } = {},
+): GameResult {
+  const playerBJ = !fromSplit && player.isBlackjack();
   const dealerBJ = dealer.isBlackjack();
 
   if (playerBJ && dealerBJ) return 'push';
@@ -56,6 +75,8 @@ export function settle(result: GameResult, bet: number, rules: HouseRules): numb
       return bet * 2;
     case 'push':
       return bet;
+    case 'surrender':
+      return bet / 2;
     case 'player-loss':
     case 'dealer-blackjack':
       return 0;

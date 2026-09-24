@@ -18,16 +18,31 @@ assumes an infinitely large deck. This one enumerates the actual game tree:
 - It conditions on the US **peek rule**: once the dealer has checked for
   blackjack, every downstream probability is renormalised on "dealer does not
   have a natural".
-- Player expected values (stand / hit / double) are derived from that dealer
-  distribution, with the hit branch playing on optimally. EV is reported in bet
-  units, and the highest-EV action is flagged as the best play.
+- Player expected values (stand / hit / double / split / surrender) are derived
+  from that dealer distribution, with the hit branch playing on optimally. EV is
+  reported in bet units, and the highest-EV action is flagged as the best play.
+- Insurance is priced from the exact share of tens among the cards the hole
+  card could be.
+- Before each hand it works out **your edge**: the exact EV of the whole round —
+  every opening deal, each played perfectly — against the shoe as it stands.
+  With a full shoe that's the house edge (−0.58% under these rules); as the shoe
+  depletes it swings with the count.
 
 Because it reads the live shoe, the odds shift as the shoe depletes — exactly
 what a card counter is tracking.
 
+Every calculation is memoised on (hand, cards left in the shoe), so the same
+state reached by drawing cards in a different order is solved once. That keeps
+a single decision well under a second, and the edge — about 500 full decision
+analyses — runs across a small pool of Web Workers in a second or two.
+
+One approximation, the standard one: a split is valued as twice the EV of one
+split hand. That's exact for the first hand; for the second it ignores which
+cards the first hand drew, which moves the figure by a few thousandths of a bet.
+
 The engine (`src/probability/`) is pure and framework-free; the React app is
-just one consumer. It's covered by 30-plus tests that check it against published
-dealer-bust and expected-value tables (`npm test`).
+just one consumer. It's covered by tests that check it against published
+dealer-bust, expected-value and basic-strategy tables (`npm test`).
 
 ## House rules
 
@@ -37,9 +52,13 @@ Las Vegas 6-deck standard, set in `src/game/rules.ts`:
 | --- | --- |
 | Decks | 6, reshuffled at 75% penetration |
 | Dealer soft 17 | Hits |
+| Dealer peeks | For blackjack under a 10 or Ace |
 | Blackjack pays | 3:2 |
-| Double down | Any first two cards |
-| Insurance / split | Not implemented |
+| Double down | Any first two cards, including after a split |
+| Split | Any pair of equal value, once (two hands); split aces get one card each; 21 after a split pays 1:1 |
+| Surrender | Late (after the peek), first two cards only |
+| Insurance | Offered against an Ace, pays 2:1; even money on a blackjack |
+| Bet | 1 unit a hand (2 after doubling) |
 
 ## Tech stack
 
@@ -55,14 +74,17 @@ src/
 ├── probability/        Pure exact-odds engine (no React)
 │   ├── deckMath.ts     Card-value buckets, hand-value arithmetic
 │   ├── dealer.ts       Exact dealer outcome distribution
-│   ├── player.ts       Stand/hit/double EV, bust odds, best action
+│   ├── player.ts       Stand/hit/double/split/surrender EV, best action
+│   ├── insurance.ts    Insurance and even money
+│   ├── edge.ts         Exact EV of a whole round (the player's edge)
 │   └── *.test.ts       Validated against published tables
 ├── game/               Game rules and state machine (no React)
 │   ├── card.ts  shoe.ts  hand.ts  rules.ts  engine.ts
 │   └── *.test.ts
+├── workers/edge.worker.ts  Runs edge calculations off the main thread
 ├── hooks/useBlackjack.ts   Bridges the engine to React
 ├── components/         UI
-└── lib/format.ts       Number formatting
+└── lib/                Formatting, the edge worker pool
 ```
 
 ## Development
@@ -91,6 +113,8 @@ no nginx reload. Override the target with `PI_DEST=...` or the base path with
 
 The app ships **zero external requests** (no web fonts, no CDN, no remote
 images), so it runs under the Pi's strict `default-src 'self'` CSP unchanged.
+The edge workers and the felt texture are separate same-origin files, never
+`blob:` or `data:` URIs, which that policy would block.
 
 ## License
 

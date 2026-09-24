@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { DecisionAnalysis, useBlackjack } from '../hooks/useBlackjack';
-import { GameResult, netResult } from '../game/rules';
-import HandView from './HandView';
-import Controls from './Controls';
+import { GameSnapshot, PlayerHand } from '../game/engine';
+import { GameResult } from '../game/rules';
+import { PlayerAction } from '../probability';
+import HandView, { Tone, TONE_COLOR } from './HandView';
+import Controls, { InsuranceOffer } from './Controls';
 import { DealerOdds, ModeToggle, OddsMode, PlayerOdds } from './Odds';
 import TableInfo from './TableInfo';
 import TableMarkings from './TableMarkings';
@@ -14,37 +16,77 @@ const RESULT_TEXT: Record<GameResult, string> = {
   push: 'Push',
   'player-loss': 'You lose',
   'dealer-blackjack': 'Dealer blackjack',
+  surrender: 'Surrendered',
 };
 
-function outcomeTone(result: GameResult): 'win' | 'loss' | 'push' {
+function outcomeTone(result: GameResult): Tone {
   if (result === 'player-blackjack' || result === 'player-win') return 'win';
   if (result === 'push') return 'push';
   return 'loss';
 }
 
-const actionEvs = (a: DecisionAnalysis) => ({
+const toneOfNet = (net: number): Tone =>
+  net > 0 ? 'win' : net < 0 ? 'loss' : 'push';
+
+/** Short per-hand result, shown beside each hand once a split is settled. */
+function handResultTag(h: PlayerHand): string {
+  if (h.hand.isBust()) return 'Bust';
+  switch (h.result) {
+    case 'player-win':
+      return 'Win';
+    case 'push':
+      return 'Push';
+    default:
+      return 'Loss';
+  }
+}
+
+const unitsText = (n: number) =>
+  `${units(n)} unit${Math.abs(n) === 1 ? '' : 's'}`;
+
+/** Headline and detail for the settled hand, announced on the felt. */
+function announce(s: GameSnapshot): { title: string; detail: string } {
+  const net = s.net ?? 0;
+  const insurance = s.insurance?.taken ? s.insurance : null;
+
+  if (insurance?.evenMoney) return { title: 'Even money', detail: unitsText(net) };
+
+  const title =
+    s.hands.length === 1
+      ? RESULT_TEXT[s.hands[0].result!]
+      : net > 0
+        ? 'You win'
+        : net < 0
+          ? 'You lose'
+          : 'Push';
+
+  let detail =
+    net === 0 && !insurance && s.hands.length === 1 ? 'bet returned' : unitsText(net);
+  if (s.hands.length > 1) detail += ' over 2 hands';
+  if (insurance) {
+    const paid = s.dealer.isBlackjack() ? 2 * insurance.bet : -insurance.bet;
+    detail += ` · insurance ${units(paid)}`;
+  }
+  return { title, detail };
+}
+
+const actionEvs = (a: DecisionAnalysis): Record<PlayerAction, number> => ({
   hit: a.action.hitEv,
   stand: a.action.stand.ev,
   double: a.action.doubleEv,
+  split: a.action.splitEv,
+  surrender: a.action.surrenderEv,
 });
 
 export default function App() {
-  const { snapshot, decision, actions, canDouble } = useBlackjack();
-  const { phase, player, dealer, result, rules, bet, count } = snapshot;
+  const { snapshot, decision, insurance, edge, actions, canDouble, canSplit, canSurrender } =
+    useBlackjack();
+  const { phase, hands, activeHand, dealer, rules, count } = snapshot;
   const [mode, setMode] = useState<OddsMode>('noCount');
 
-  const playerOutcome =
-    phase === 'result' && result ? outcomeTone(result) : null;
-  const dealerOutcome =
-    phase === 'result' && result
-      ? outcomeTone(result) === 'win'
-        ? 'loss'
-        : outcomeTone(result) === 'loss'
-          ? 'win'
-          : 'push'
-      : null;
-
-  const delta = result ? netResult(result, bet, rules) : 0;
+  const settled = phase === 'result';
+  const net = snapshot.net ?? 0;
+  const split = hands.length > 1;
 
   // One mode drives every figure on the table — the odds and the button EVs.
   const active = decision ? decision[mode] : null;
@@ -56,36 +98,51 @@ export default function App() {
   const baseEvs = live && baseline ? actionEvs(baseline) : null;
   const evDeltas =
     evValues && baseEvs
-      ? {
-          hit: evValues.hit - baseEvs.hit,
-          stand: evValues.stand - baseEvs.stand,
-          double: evValues.double - baseEvs.double,
-        }
+      ? (Object.fromEntries(
+          Object.entries(evValues).map(([k, v]) => [
+            k,
+            v - baseEvs[k as PlayerAction],
+          ]),
+        ) as Record<PlayerAction, number>)
       : null;
 
-  const announcement =
-    phase === 'result' && result ? (
-      <div className="fade-up rounded-2xl bg-black/35 px-6 py-2 text-center shadow-lg backdrop-blur-sm">
-        <div className="serif text-2xl font-bold tracking-tight text-[var(--ink)] sm:text-3xl">
-          {RESULT_TEXT[result]}
-        </div>
-        <div
-          className="tabular text-sm font-semibold"
-          style={{
-            color:
-              delta > 0
-                ? 'var(--win)'
-                : delta < 0
-                  ? 'var(--loss)'
-                  : 'var(--text-muted)',
-          }}
-        >
-          {delta !== 0
-            ? `${units(delta)} unit${Math.abs(delta) === 1 ? '' : 's'}`
-            : 'bet returned'}
-        </div>
+  const offer = insurance ? insurance[mode] : null;
+  const offerBase = insurance && mode === 'counting' ? insurance.noCount : null;
+  const insuranceOffer: InsuranceOffer | null = offer && {
+    evenMoney: offer.evenMoney,
+    takeEv: offer.takeEv,
+    declineEv: offer.declineEv,
+    takeDelta: offerBase ? offer.takeEv - offerBase.takeEv : undefined,
+    declineDelta: offerBase ? offer.declineEv - offerBase.declineEv : undefined,
+    best: offer.best,
+  };
+
+  const shownEdge = mode === 'counting' ? edge.counting : edge.noCount;
+  const edgeDelta =
+    mode === 'counting' && edge.counting !== null && edge.noCount !== null
+      ? edge.counting - edge.noCount
+      : null;
+
+  const summary = settled ? announce(snapshot) : null;
+  const announcement = summary ? (
+    <div className="fade-up rounded-2xl bg-black/35 px-6 py-2 text-center shadow-lg backdrop-blur-sm">
+      <div className="serif text-2xl font-bold tracking-tight text-[var(--ink)] sm:text-3xl">
+        {summary.title}
       </div>
-    ) : undefined;
+      <div
+        className="tabular text-sm font-semibold"
+        style={{
+          color: net > 0 ? 'var(--win)' : net < 0 ? 'var(--loss)' : 'var(--text-muted)',
+        }}
+      >
+        {summary.detail}
+      </div>
+    </div>
+  ) : undefined;
+
+  const dealerTone: Tone | null = settled
+    ? ({ win: 'loss', loss: 'win', push: 'push' } as const)[toneOfNet(net)]
+    : null;
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[56rem] flex-col gap-4 px-4 py-4 sm:gap-6 sm:py-8">
@@ -105,7 +162,8 @@ export default function App() {
             hand={dealer}
             label="Dealer"
             hideHole={snapshot.dealerHoleHidden}
-            outcome={dealerOutcome}
+            flipHole
+            outcome={dealerTone}
           />
         </div>
 
@@ -113,6 +171,8 @@ export default function App() {
           active={active}
           baseline={baseline}
           stale={stale}
+          insurance={offer}
+          insuranceBaseline={offerBase}
           style={{ gridArea: 'dealer-odds' }}
         />
 
@@ -122,21 +182,57 @@ export default function App() {
           style={{ gridArea: 'middle' }}
         />
 
-        <div style={{ gridArea: 'player' }}>
-          <HandView hand={player} label="You" outcome={playerOutcome} />
+        <div
+          className="flex flex-wrap items-start justify-center gap-x-4 gap-y-3 sm:gap-x-8"
+          style={{ gridArea: 'player' }}
+        >
+          {hands.map((h, i) => (
+            <HandView
+              key={i}
+              hand={h.hand}
+              label={split ? `Hand ${i + 1}` : 'You'}
+              bet={h.bet}
+              compact={split}
+              active={split && phase === 'player' && i === activeHand}
+              waiting={split && phase === 'player' && i !== activeHand}
+              outcome={settled && h.result ? outcomeTone(h.result) : null}
+              tag={
+                settled && split && h.result ? (
+                  <span
+                    className="text-[11px] font-semibold uppercase tracking-wide"
+                    style={{ color: TONE_COLOR[outcomeTone(h.result)] }}
+                  >
+                    {handResultTag(h)}
+                  </span>
+                ) : undefined
+              }
+            />
+          ))}
         </div>
 
         <div style={{ gridArea: 'actions' }}>
           <Controls
-            snapshot={snapshot}
+            phase={phase}
             canDouble={canDouble}
+            canSplit={canSplit}
+            canSurrender={canSurrender}
             recommended={live ? active.action.best : null}
             evValues={evValues}
             evDeltas={evDeltas}
+            insurance={insuranceOffer}
+            nextHand={{
+              edge: shownEdge,
+              edgeDelta,
+              newShoe: snapshot.reshuffleNext,
+            }}
             onDeal={actions.deal}
             onHit={actions.hit}
             onStand={actions.stand}
             onDouble={actions.double}
+            onSplit={actions.split}
+            onSurrender={actions.surrender}
+            onTakeInsurance={actions.takeInsurance}
+            onDeclineInsurance={actions.declineInsurance}
             onPlayAgain={actions.playAgain}
           />
         </div>
@@ -145,7 +241,10 @@ export default function App() {
           active={active}
           baseline={baseline}
           stale={stale}
+          insurance={offer}
+          insuranceBaseline={offerBase}
           mode={mode}
+          handLabel={split ? `Hand ${activeHand + 1}` : undefined}
           style={{ gridArea: 'player-odds' }}
         />
       </main>
