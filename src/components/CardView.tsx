@@ -4,28 +4,24 @@ import { Card, isRedSuit, SUIT_SYMBOL } from '../game/card';
 interface Props {
   card?: Card;
   faceDown?: boolean;
-  /** Position within the hand — staggers the deal-in animation slightly. */
-  dealIndex?: number;
+  /** Wait before sliding in, to stagger cards dealt together (ms). */
+  dealDelay?: number;
   /** Turn over in place (the hole card) instead of sliding in from the shoe. */
   reveal?: boolean;
-  className?: string;
 }
 
 export default function CardView({
   card,
   faceDown,
-  dealIndex = 0,
+  dealDelay: delayMs = 0,
   reveal = false,
-  className = '',
 }: Props) {
-  const dealDelay = {
-    '--deal-delay': `${Math.min(dealIndex, 1) * 160}ms`,
-  } as CSSProperties;
+  const dealDelay = { '--deal-delay': `${delayMs}ms` } as CSSProperties;
 
   if (faceDown || !card) {
     return (
       <div
-        className={`card-in card-back h-20 w-14 shrink-0 rounded-lg sm:h-28 sm:w-20 ${className}`}
+        className="card-in card-back h-20 w-14 rounded-lg sm:h-28 sm:w-20"
         style={dealDelay}
         aria-label="face-down card"
       />
@@ -35,7 +31,7 @@ export default function CardView({
   const red = isRedSuit(card.suit);
   return (
     <div
-      className={`${reveal ? 'card-flip' : 'card-in'} playing-card relative flex h-20 w-14 shrink-0 flex-col justify-between rounded-lg p-1 sm:h-28 sm:w-20 sm:p-2 ${className}`}
+      className={`${reveal ? 'card-flip' : 'card-in'} playing-card relative flex h-20 w-14 flex-col justify-between rounded-lg p-1 sm:h-28 sm:w-20 sm:p-2`}
       style={{
         ...dealDelay,
         color: red ? 'var(--card-red)' : 'var(--card-ink)',
