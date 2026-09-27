@@ -2,7 +2,7 @@
 #
 # Build Blackjack Probabilities and publish it to https://domalouf.com/blackjack/.
 #
-# The Pi runs the HealthBoard docker-compose stack; nginx serves
+# The server (`lts`) runs the HealthBoard docker-compose stack; nginx serves
 # ~/HealthBoard/piStuff/website/ (bind-mounted read-only into the container).
 # This script rsyncs the built site into the `blackjack/` sub-directory of that
 # web root, leaving the landing page and /sleep/ /api/ paths untouched. Static
@@ -11,16 +11,16 @@
 # The nginx `location /` block already does `try_files $uri $uri/ =404`, so a
 # request for /blackjack/ resolves to /blackjack/index.html with no config
 # change. HealthBoard's .gitignore excludes piStuff/website/blackjack/ so
-# `git pull --ff-only` on the Pi stays clean.
+# `git pull --ff-only` on the server stays clean.
 #
 # Config via environment (optional):
-#   PI_DEST     rsync destination (default: pi:HealthBoard/piStuff/website/blackjack/)
+#   PI_DEST     rsync destination (default: lts:HealthBoard/piStuff/website/blackjack/)
 #   BASE_PATH   app base path     (default: /blackjack/)
 #
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-dest="${PI_DEST:-pi:HealthBoard/piStuff/website/blackjack/}"
+dest="${PI_DEST:-lts:HealthBoard/piStuff/website/blackjack/}"
 export BASE_PATH="${BASE_PATH:-/blackjack/}"
 
 log() { printf '==> %s\n' "$*"; }

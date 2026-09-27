@@ -99,7 +99,7 @@ npm run build      # -> dist/
 ## Deployment
 
 The site is served from the `blackjack/` sub-path of the web root on the
-Raspberry Pi that runs [domalouf.com](https://domalouf.com) (nginx in the
+home server (`lts`) that runs [domalouf.com](https://domalouf.com) (nginx in the
 HealthBoard docker-compose stack).
 
 ```bash
@@ -107,12 +107,12 @@ HealthBoard docker-compose stack).
 ```
 
 This runs the tests, builds with `base=/blackjack/`, and rsyncs `dist/` to
-`pi:HealthBoard/piStuff/website/blackjack/`. Static files are live immediately —
+`lts:HealthBoard/piStuff/website/blackjack/`. Static files are live immediately —
 no nginx reload. Override the target with `PI_DEST=...` or the base path with
 `BASE_PATH=...` to host it elsewhere.
 
 The app ships **zero external requests** (no web fonts, no CDN, no remote
-images), so it runs under the Pi's strict `default-src 'self'` CSP unchanged.
+images), so it runs under the server's strict `default-src 'self'` CSP unchanged.
 The edge workers and the felt texture are separate same-origin files, never
 `blob:` or `data:` URIs, which that policy would block.
 
