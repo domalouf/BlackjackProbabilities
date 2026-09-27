@@ -14,13 +14,13 @@
 # `git pull --ff-only` on the server stays clean.
 #
 # Config via environment (optional):
-#   PI_DEST     rsync destination (default: lts:HealthBoard/piStuff/website/blackjack/)
+#   DEPLOY_DEST     rsync destination (default: lts:HealthBoard/piStuff/website/blackjack/)
 #   BASE_PATH   app base path     (default: /blackjack/)
 #
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-dest="${PI_DEST:-lts:HealthBoard/piStuff/website/blackjack/}"
+dest="${DEPLOY_DEST:-lts:HealthBoard/piStuff/website/blackjack/}"
 export BASE_PATH="${BASE_PATH:-/blackjack/}"
 
 log() { printf '==> %s\n' "$*"; }

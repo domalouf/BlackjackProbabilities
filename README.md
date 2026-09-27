@@ -108,7 +108,7 @@ HealthBoard docker-compose stack).
 
 This runs the tests, builds with `base=/blackjack/`, and rsyncs `dist/` to
 `lts:HealthBoard/piStuff/website/blackjack/`. Static files are live immediately —
-no nginx reload. Override the target with `PI_DEST=...` or the base path with
+no nginx reload. Override the target with `DEPLOY_DEST=...` or the base path with
 `BASE_PATH=...` to host it elsewhere.
 
 The app ships **zero external requests** (no web fonts, no CDN, no remote
