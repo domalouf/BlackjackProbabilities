@@ -99,15 +99,15 @@ npm run build      # -> dist/
 ## Deployment
 
 The site is served from the `blackjack/` sub-path of the web root on the
-home server (`lts`) that runs [domalouf.com](https://domalouf.com) (nginx in the
-HealthBoard docker-compose stack).
+home server (`lts`) that runs [domalouf.com](https://domalouf.com) (the site's own
+stack, from the [MyWebsite](https://github.com/domalouf/MyWebsite) repo).
 
 ```bash
 ./deploy/deploy.sh
 ```
 
 This runs the tests, builds with `base=/blackjack/`, and rsyncs `dist/` to
-`lts:HealthBoard/piStuff/website/blackjack/`. Static files are live immediately —
+`lts:site/www/blackjack/`. Static files are live immediately —
 no nginx reload. Override the target with `DEPLOY_DEST=...` or the base path with
 `BASE_PATH=...` to host it elsewhere.
 
