@@ -6,6 +6,7 @@ import { PlayerAction } from '../probability';
 import HandView, { Tone, TONE_COLOR } from './HandView';
 import Controls, { InsuranceOffer } from './Controls';
 import { DealerOdds, ModeToggle, OddsMode, PlayerOdds } from './Odds';
+import ShoeGauge from './ShoeGauge';
 import TableInfo from './TableInfo';
 import TableMarkings from './TableMarkings';
 import { units } from '../lib/format';
@@ -151,6 +152,7 @@ export default function App() {
           Blackjack Probabilities
         </h1>
         <div className="flex grow flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:grow-0 sm:gap-x-5">
+          <ShoeGauge shoe={snapshot.shoe} decks={rules.decks} />
           <TableInfo count={count} />
           <ModeToggle mode={mode} onChange={setMode} />
         </div>

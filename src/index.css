@@ -29,6 +29,12 @@
   --bust: #c9463f;
   --push: #e2b25a;
 
+  /* What counting changes: sky for more likely, orchid for less likely. */
+  --count-up: #7ad3ff;
+  --count-up-bg: rgba(122, 211, 255, 0.16);
+  --count-down: #f2a0ff;
+  --count-down-bg: rgba(242, 160, 255, 0.16);
+
   --card: #fbf9f3;
   --card-ink: #1c1c20;
   --card-red: #c8243a;
@@ -82,6 +88,16 @@ body::before {
 .tabular {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum';
+}
+
+/* The share of a bar that counting took away: hatched, so it reads as gone. */
+.count-removed {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--count-down) 0 1.5px,
+    transparent 1.5px 4px
+  );
+  box-shadow: inset 0 0 0 1px var(--count-down);
 }
 
 .serif {

@@ -83,6 +83,16 @@ export class Shoe {
     return card;
   }
 
+  /** Cards in a full shoe. */
+  size(): number {
+    return this.decks * 52;
+  }
+
+  /** Cards left behind the cut card: the shoe is reshuffled at this many. */
+  cutCardAt(): number {
+    return this.reshuffleAt;
+  }
+
   cardsRemaining(): number {
     return this.cards.length;
   }

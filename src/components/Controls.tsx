@@ -69,6 +69,30 @@ function PrimaryButton({
   );
 }
 
+/** A change from the no-count figure, in the count's up / down colors. */
+function CountDelta({
+  diff,
+  className = '',
+  children,
+}: {
+  diff: number;
+  className?: string;
+  children: ReactNode;
+}) {
+  const tone = diff > 0 ? 'up' : diff < 0 ? 'down' : null;
+  return (
+    <span
+      className={`tabular rounded px-1 text-[10px] font-semibold leading-4 ${className}`}
+      style={{
+        color: tone ? `var(--count-${tone})` : 'var(--text-muted)',
+        background: tone ? `var(--count-${tone}-bg)` : undefined,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 function ActionButton({
   label,
   onClick,
@@ -105,10 +129,10 @@ function ActionButton({
           EV {ev(evValue)}
         </span>
       )}
-      {showEv && evDelta !== undefined && Number.isFinite(evDelta) && (
-        <span className="tabular text-[10px] font-medium text-[var(--text-muted)]">
-          ({ev(evDelta)})
-        </span>
+      {showEv && evDelta !== undefined && Math.abs(evDelta) >= 0.0005 && (
+        <CountDelta diff={evDelta} className="mt-0.5">
+          {ev(evDelta)}
+        </CountDelta>
       )}
       {best && (
         <span className="absolute -top-2 rounded-full bg-[var(--gold)] px-1.5 text-[9px] font-bold uppercase leading-4 tracking-wider text-[var(--gold-ink)]">
@@ -144,7 +168,11 @@ function NextHandPanel({
               {signedPct(edge)}
             </span>
             {edgeDelta !== null && Math.abs(edgeDelta) >= 0.00005 && (
-              <span className="tabular"> ({pctDelta(edgeDelta, 2)} vs no count)</span>
+              <>
+                {' '}
+                <CountDelta diff={edgeDelta}>{pctDelta(edgeDelta, 2)}</CountDelta> vs no
+                count
+              </>
             )}
           </>
         )}
