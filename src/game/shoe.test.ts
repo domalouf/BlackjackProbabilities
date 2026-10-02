@@ -31,6 +31,30 @@ describe('Shoe running count', () => {
   });
 });
 
+describe('Shoe cut card', () => {
+  it('sits 1½ decks from the back of a 6-deck shoe at 75% penetration', () => {
+    const shoe = new Shoe(6, 0.75);
+    expect(shoe.size()).toBe(312);
+    expect(shoe.cutCardAt()).toBe(78);
+  });
+
+  it('calls for a reshuffle once the dealing reaches it', () => {
+    const shoe = new Shoe(6, 0.75);
+    for (let i = 0; i < 312 - 79; i++) shoe.deal();
+    expect(shoe.needsReshuffle()).toBe(false);
+    shoe.deal();
+    expect(shoe.cardsRemaining()).toBe(78);
+    expect(shoe.needsReshuffle()).toBe(true);
+  });
+
+  it('is reported in the game snapshot', () => {
+    const game = new BlackjackGame();
+    expect(game.snapshot().shoe).toEqual({ size: 312, remaining: 312, cutCardAt: 78 });
+    game.deal();
+    expect(game.snapshot().shoe.remaining).toBe(308);
+  });
+});
+
 describe('BlackjackGame card count', () => {
   const freshHand = (): BlackjackGame => {
     for (let attempt = 0; attempt < 50; attempt++) {

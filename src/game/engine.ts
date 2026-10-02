@@ -40,6 +40,16 @@ export interface CardCount {
   seen: number;
 }
 
+/** Where the shoe stands, in cards, for drawing it. */
+export interface ShoeState {
+  /** Cards in a full shoe. */
+  size: number;
+  /** Cards not yet dealt. The dealer's hole card has left the shoe. */
+  remaining: number;
+  /** Cards left when the cut card comes out and the shoe is reshuffled. */
+  cutCardAt: number;
+}
+
 /** One of the player's hands — two after a split. */
 export interface PlayerHand {
   hand: Hand;
@@ -77,6 +87,7 @@ export interface GameSnapshot {
   rules: HouseRules;
   count: CardCount;
   shoePenetration: number;
+  shoe: ShoeState;
   reshuffledLastDeal: boolean;
   /** The cut card is out: the next hand comes from a freshly shuffled shoe. */
   reshuffleNext: boolean;
@@ -111,7 +122,7 @@ export class BlackjackGame {
     private readonly rules: HouseRules = VEGAS_6_DECK,
     shoe?: Shoe,
   ) {
-    this.shoe = shoe ?? new Shoe(rules.decks);
+    this.shoe = shoe ?? new Shoe(rules.decks, rules.penetration);
   }
 
   snapshot(): GameSnapshot {
@@ -126,6 +137,11 @@ export class BlackjackGame {
       rules: this.rules,
       count: this.cardCount(),
       shoePenetration: this.shoe.penetration(),
+      shoe: {
+        size: this.shoe.size(),
+        remaining: this.shoe.cardsRemaining(),
+        cutCardAt: this.shoe.cutCardAt(),
+      },
       reshuffledLastDeal: this.reshuffledLastDeal,
       reshuffleNext: this.shoe.needsReshuffle(),
       version: this.version,

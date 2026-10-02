@@ -50,7 +50,7 @@ Las Vegas 6-deck standard, set in `src/game/rules.ts`:
 
 | Rule | Value |
 | --- | --- |
-| Decks | 6, reshuffled at 75% penetration |
+| Decks | 6, cut card 1½ decks from the back: reshuffled once 75% is dealt, the usual Vegas placement |
 | Dealer soft 17 | Hits |
 | Dealer peeks | For blackjack under a 10 or Ace |
 | Blackjack pays | 3:2 |

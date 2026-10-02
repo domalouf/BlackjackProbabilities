@@ -2,7 +2,7 @@ import { Hand } from './hand';
 
 /**
  * House rules. The defaults are the Las Vegas 6-deck standard:
- * 6 decks, dealer hits soft 17, blackjack pays 3:2, double on any two cards,
+ * 6 decks cut 1½ decks from the back (75% dealt), dealer hits soft 17, blackjack pays 3:2, double on any two cards,
  * double after split, late surrender, insurance offered against an Ace.
  *
  * Pairs may be split once (two hands, no re-splitting); split aces get one
@@ -10,6 +10,12 @@ import { Hand } from './hand';
  */
 export interface HouseRules {
   decks: number;
+  /**
+   * Share of the shoe dealt before the cut card comes out and the shoe is
+   * reshuffled. Vegas 6-deck games place the cut card 1 to 1½ decks from the
+   * back; 0.75 is the usual 1½.
+   */
+  penetration: number;
   hitSoft17: boolean;
   blackjackPayout: number; // profit multiple on the stake (1.5 = 3:2)
   /** Double down allowed on a two-card hand formed by splitting. */
@@ -20,6 +26,7 @@ export interface HouseRules {
 
 export const VEGAS_6_DECK: HouseRules = {
   decks: 6,
+  penetration: 0.75,
   hitSoft17: true,
   blackjackPayout: 1.5,
   doubleAfterSplit: true,
