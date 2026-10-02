@@ -26,11 +26,94 @@ interface OddsProps {
 
 const fmt = (value: number | null) => (value === null ? '—' : pct(value));
 
+/** Changes smaller than this (0.05pp) round to nothing and aren't shown. */
+const NOISE = 0.0005;
+
+/** How far counting moved a figure from its no-count value, 0 if not at all. */
+const shift = (value: number | null, base?: number): number => {
+  if (value === null || base === undefined) return 0;
+  const diff = value - base;
+  return Math.abs(diff) < NOISE ? 0 : diff;
+};
+
 function DeltaBadge({ diff, digits = 1 }: { diff: number; digits?: number }) {
-  if (Math.abs(diff) < 0.0005) return null;
+  if (diff === 0) return null;
+  const up = diff > 0;
   return (
-    <span className="tabular ml-1 text-[10px] font-medium text-[var(--text-muted)]">
-      ({pctDelta(diff, digits)})
+    <span
+      className="tabular rounded px-1 text-[10px] font-semibold leading-4"
+      style={{
+        color: up ? 'var(--count-up)' : 'var(--count-down)',
+        background: up ? 'var(--count-up-bg)' : 'var(--count-down-bg)',
+      }}
+    >
+      {pctDelta(diff, digits)}
+    </span>
+  );
+}
+
+/**
+ * One bar's fill, split so the change from not counting stands out: the share
+ * both shoes agree on in the bar's own color, then whatever counting added in
+ * solid sky, or whatever it took away hatched in orchid.
+ */
+function ShiftedFill({
+  label,
+  value,
+  base,
+  color,
+  scale,
+  rounded,
+}: {
+  label: string;
+  value: number | null;
+  base?: number;
+  color: string;
+  /** The figure that spans the full bar. */
+  scale: number;
+  rounded?: boolean;
+}) {
+  const v = value ?? 0;
+  const diff = shift(value, base);
+  const width = (x: number) => `${(Math.max(x, 0) / scale) * 100}%`;
+  return (
+    <div
+      className={`flex h-full ${rounded ? 'overflow-hidden rounded-full' : ''}`}
+      title={`${label}: ${fmt(value)}${diff ? ` (${pctDelta(diff)} vs no count)` : ''}`}
+    >
+      <div
+        className="h-full transition-[width] duration-300"
+        style={{ width: width(diff < 0 ? v : v - diff), background: color }}
+      />
+      <div
+        className={`h-full transition-[width] duration-300 ${diff < 0 ? 'count-removed' : ''}`}
+        style={{
+          width: width(Math.abs(diff)),
+          // Even a tenth of a point should show as a sliver, not vanish.
+          minWidth: diff ? 3 : 0,
+          background: diff > 0 ? 'var(--count-up)' : undefined,
+        }}
+      />
+    </div>
+  );
+}
+
+/** Room a figure takes in a bar: its no-count value too, if counting cut it. */
+const footprint = (value: number | null, base?: number): number =>
+  (value ?? 0) - Math.min(shift(value, base), 0);
+
+/** What the sky and orchid in the bars mean, beside each Counting heading. */
+function CountKey() {
+  return (
+    <span className="flex items-center gap-2 whitespace-nowrap" title="Change from not counting">
+      <span className="flex items-center gap-1">
+        <span className="inline-block h-2 w-3 rounded-sm bg-[var(--count-up)]" />
+        up
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="count-removed inline-block h-2 w-3 rounded-sm" />
+        down
+      </span>
     </span>
   );
 }
@@ -99,20 +182,33 @@ function StackedBar({
     color: string;
   }[];
 }) {
+  // A segment that shrank keeps its old footprint (hatched), so the bar spans
+  // the larger of each figure; the change is a few points, the stretch small.
+  const span = Math.max(
+    segments.reduce((sum, s) => sum + footprint(s.value, s.baseline), 0),
+    1,
+  );
   return (
     <div>
       <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[var(--track)] sm:h-3">
-        {segments.map((s) => (
-          <div
-            key={s.label}
-            className="h-full transition-[width] duration-300"
-            style={{
-              width: `${Math.max((s.value ?? 0) * 100, 0)}%`,
-              background: s.color,
-            }}
-            title={`${s.label}: ${fmt(s.value)}`}
-          />
-        ))}
+        {segments.map((s) => {
+          const room = footprint(s.value, s.baseline);
+          return (
+            <div
+              key={s.label}
+              className="h-full transition-[width] duration-300"
+              style={{ width: `${(room / span) * 100}%` }}
+            >
+              <ShiftedFill
+                label={s.label}
+                value={s.value}
+                base={s.baseline}
+                color={s.color}
+                scale={room || 1}
+              />
+            </div>
+          );
+        })}
       </div>
       <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
         {segments.map((s) => (
@@ -123,9 +219,7 @@ function StackedBar({
             />
             <span className="text-[var(--text-muted)]">{s.label}</span>
             <span className="tabular font-semibold">{fmt(s.value)}</span>
-            {s.value !== null && s.baseline !== undefined && (
-              <DeltaBadge diff={s.value - s.baseline} />
-            )}
+            <DeltaBadge diff={shift(s.value, s.baseline)} />
           </span>
         ))}
       </div>
@@ -141,7 +235,10 @@ interface BarRow {
 }
 
 function BarRows({ rows, scale }: { rows: BarRow[]; scale?: number }) {
-  const max = scale ?? Math.max(...rows.map((r) => r.value ?? 0), 0.01);
+  const counting = rows.some((r) => r.base !== undefined);
+  const max =
+    scale ??
+    Math.max(...rows.map((r) => Math.max(r.value ?? 0, r.base ?? 0)), 0.01);
   return (
     <div className="space-y-1 sm:space-y-1.5">
       {rows.map((r) => (
@@ -153,19 +250,22 @@ function BarRows({ rows, scale }: { rows: BarRow[]; scale?: number }) {
             {r.label}
           </span>
           <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-[var(--track)] sm:h-3">
-            <div
-              className="h-full rounded-full transition-[width] duration-300"
-              style={{
-                width: `${((r.value ?? 0) / max) * 100}%`,
-                background: r.highlight ?? 'var(--neutral)',
-              }}
+            <ShiftedFill
+              label={r.label}
+              value={r.value}
+              base={r.base}
+              color={r.highlight ?? 'var(--neutral)'}
+              scale={max}
+              rounded
             />
           </div>
           <span className="tabular w-12 text-right text-xs font-semibold">
             {fmt(r.value)}
           </span>
-          {r.value !== null && r.base !== undefined && (
-            <DeltaBadge diff={r.value - r.base} />
+          {counting && (
+            <span className="flex w-12 shrink-0 justify-end">
+              <DeltaBadge diff={shift(r.value, r.base)} />
+            </span>
           )}
         </div>
       ))}
@@ -205,7 +305,7 @@ function DealerBars({
 
 function caption(stale: boolean, baseline: DecisionAnalysis | null) {
   if (stale) return 'at your last decision';
-  if (baseline) return '(Δ vs no count)';
+  if (baseline) return <CountKey />;
   return null;
 }
 
@@ -230,7 +330,7 @@ export function DealerOdds({
       <section className="mx-auto w-full max-w-md lg:max-w-none" style={style}>
         <Heading
           title="Dealer's hole card"
-          aside={insuranceBaseline ? '(Δ vs no count)' : null}
+          aside={insuranceBaseline ? <CountKey /> : null}
         />
         <BarRows
           scale={1}
@@ -411,7 +511,7 @@ export function PlayerOdds({
             {active.canSplit && 'Split counts both hands, in units of your first bet. '}
             {mode === 'noCount'
               ? 'Assumes a fresh shoe each hand — the basic-strategy baseline.'
-              : "Uses the shoe's real composition; figures in parentheses are the change from not counting."}
+              : "Uses the shoe's real composition. Sky marks what the count adds to each chance, hatched orchid what it takes away."}
           </>
         ) : (
           <>
